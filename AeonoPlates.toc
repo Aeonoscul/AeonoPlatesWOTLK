@@ -1,0 +1,7 @@
+## Interface: 30300
+## Title: AeonoPlates |cff7fff7f[3.3.5]|r
+## Notes: Кастомизация неймплейтов для Wrath of the Lich King
+## Author: Aeonoscul
+## Version: 1.1
+
+core.lua
