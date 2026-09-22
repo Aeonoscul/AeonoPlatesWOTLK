@@ -1,8 +1,28 @@
 ## Interface: 30300
 ## Title: AeonoPlates [3.3.5]
-## Notes: Кастомизация неймплейтов для WotLK
+## Notes: Nameplate addon
 ## Author: Aeonoscul
-## Version: 2.0
+## Version: 1.0.0
 ## SavedVariables: AeonoPlatesDB
+## OptionalDeps: Ace3, LibNameplates-1.0
 
+Libs\LibStub\LibStub.lua
+Libs\CallbackHandler-1.0\CallbackHandler-1.0.xml
+Libs\AceAddon-3.0\AceAddon-3.0.xml
+Libs\AceDB-3.0\AceDB-3.0.xml
+Libs\AceDBOptions-3.0\AceDBOptions-3.0.xml
+Libs\AceConsole-3.0\AceConsole-3.0.xml
+Libs\AceEvent-3.0\AceEvent-3.0.xml
+Libs\AceGUI-3.0\AceGUI-3.0.xml
+Libs\AceConfig-3.0\AceConfig-3.0.xml
+Libs\AceHook-3.0\AceHook-3.0.xml
+Libs\LibDataBroker-1.1\LibDataBroker-1.1.lua
+Libs\LibDBIcon-1.0\lib.xml
+Libs\LibSharedMedia-3.0\LibSharedMedia-3.0.lua
+Libs\AceGUI-3.0-SharedMediaWidgets\widget.xml
+Libs\LibDeflate\lib.xml
+Libs\LibNameplates-1.0\LibNameplates-1.0.lua
+
+profiles.lua
 core.lua
+options.lua
