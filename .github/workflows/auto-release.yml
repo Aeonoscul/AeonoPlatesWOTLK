@@ -1,0 +1,66 @@
+name: Auto Release on TOC Update
+
+on:
+  push:
+    branches:
+      - master
+    paths:
+      - '**/*.toc'
+
+jobs:
+  create-release:
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      # 1. Читаем версию из .toc
+      - name: Get version from .toc
+        id: read_version
+        run: |
+          TOC_FILE=$(find . -maxdepth 2 -name "*.toc" | head -n 1)
+          if [ -z "$TOC_FILE" ]; then
+            echo "Error: .toc file not found!"
+            exit 1
+          fi
+          VERSION=$(grep -i "## Version:" "$TOC_FILE" | awk -F ':' '{print $2}' | tr -d ' \r\n')
+          if [ -z "$VERSION" ]; then
+            echo "Error: '## Version:' is empty!"
+            exit 1
+          fi
+          echo "version=$VERSION" >> $GITHUB_OUTPUT
+
+      # 2. Проверяем, существует ли уже релиз с такой версией
+      - name: Check if release exists
+        id: check_release
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          if gh release view "${{ steps.read_version.outputs.version }}" --repo "${{ github.repository }}" >/dev/null 2>&1; then
+            echo "exists=true" >> $GITHUB_OUTPUT
+            echo "Release ${{ steps.read_version.outputs.version }} already exists. Skipping."
+          else
+            echo "exists=false" >> $GITHUB_OUTPUT
+            echo "Release ${{ steps.read_version.outputs.version }} does not exist. Will create."
+          fi
+
+      # 3. Создаём архив с папкой "AeonoPlates" внутри
+      - name: Create Archive
+        if: steps.check_release.outputs.exists == 'false'
+        run: |
+          VERSION="${{ steps.read_version.outputs.version }}"
+          git archive --format=zip HEAD --prefix="AeonoPlates/" -o "AeonoPlates-${VERSION}.zip"
+
+      # 4. Создаём релиз
+      - name: Create GitHub Release
+        if: steps.check_release.outputs.exists == 'false'
+        uses: softprops/action-gh-release@v2
+        with:
+          tag_name: ${{ steps.read_version.outputs.version }}
+          name: v${{ steps.read_version.outputs.version }}
+          files: AeonoPlates-${{ steps.read_version.outputs.version }}.zip
+          draft: false
+          prerelease: false
