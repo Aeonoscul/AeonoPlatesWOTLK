@@ -120,47 +120,6 @@ local function UpdateFriendClassInfo()
     end
 end
 
-local plateUnitCache = setmetatable({}, {
-    __mode = "k"
-})
-local plateUnitCacheName = setmetatable({}, {
-    __mode = "k"
-})
-
-local function GetPlateUnit(frame)
-    local cachedName = plateUnitCacheName[frame]
-    local currentName = frame.oldname and frame.oldname:GetText()
-
-    if cachedName == currentName then
-        local unit = plateUnitCache[frame]
-        if unit == false then
-            return nil
-        end
-        if unit and UnitExists(unit) then
-            return unit
-        end
-    end
-
-    plateUnitCacheName[frame] = currentName
-
-    if not currentName or currentName == "" then
-        plateUnitCache[frame] = false
-        return nil
-    end
-    local cleanName = currentName:gsub("%s*%(%*%)", "")
-
-    for i = 1, 40 do
-        local unit = "nameplate" .. i
-        if UnitExists(unit) and UnitName(unit) == cleanName then
-            plateUnitCache[frame] = unit
-            return unit
-        end
-    end
-
-    plateUnitCache[frame] = false
-    return nil
-end
-
 local function DetectPlateTypeFromColor(r, g, b)
     if r > 0.99 and g > 0.99 and b < 0.01 then
         return "neutral"
@@ -182,29 +141,20 @@ local function DetectPlateTypeFromColor(r, g, b)
     return "enemy_player"
 end
 
-local function GetPlateType(frame)
-    local unit = GetPlateUnit(frame)
-    if unit then
-        local isPlayer = UnitIsPlayer(unit)
-        local reaction = UnitReaction and UnitReaction("player", unit)
-        if reaction then
-            if reaction > 4 then
-                return isPlayer and "friendly_player" or "friendly_npc"
-            elseif reaction == 4 then
-                return "neutral"
-            else
-                return isPlayer and "enemy_player" or "enemy_npc"
-            end
-        end
-        if UnitIsFriend("player", unit) then
-            return isPlayer and "friendly_player" or "friendly_npc"
-        elseif UnitIsEnemy("player", unit) then
-            return isPlayer and "enemy_player" or "enemy_npc"
-        else
-            return "neutral"
-        end
+local function CaptureOriginalColor(frame)
+    local hb = frame.healthBar
+    if not hb then
+        return
     end
+    local r, g, b = hb:GetStatusBarColor()
+    frame._origBarColor = { r = r, g = g, b = b }
+end
 
+local function GetPlateType(frame)
+    local c = frame._origBarColor
+    if c then
+        return DetectPlateTypeFromColor(c.r, c.g, c.b)
+    end
     local hb = frame.healthBar
     if not hb then
         return nil
@@ -267,7 +217,12 @@ local function ApplyHealthBarColor(frame)
     end
 
     if frame._hpType == "enemy_player" and not frame._classColor then
-        local cr, cg, cb = hb:GetStatusBarColor()
+        local cr, cg, cb
+        if frame._origBarColor then
+            cr, cg, cb = frame._origBarColor.r, frame._origBarColor.g, frame._origBarColor.b
+        else
+            cr, cg, cb = hb:GetStatusBarColor()
+        end
         for _, c in pairs(RAID_CLASS_COLORS) do
             if math.abs(cr - c.r) < 0.01 and math.abs(cg - c.g) < 0.01 and math.abs(cb - c.b) < 0.01 then
                 frame._classColor = {
@@ -294,8 +249,7 @@ end
 local function ResetPlateColorCache(frame)
     frame._hpType = nil
     frame._classColor = nil
-    plateUnitCache[frame] = nil
-    plateUnitCacheName[frame] = nil
+    -- _origBarColor не сбрасываем — это источник истины для детекта типа
 end
 
 local FRAME_LEVELS_PER_PLATE = 3
@@ -1305,6 +1259,7 @@ local function OnFrameHide(self)
     end
     self._lastNameString = nil
     self._unit = nil
+    self._origBarColor = nil
     ResetPlateColorCache(self)
     if self.customCastBar then
         ResetCastBar(self.customCastBar)
@@ -1323,6 +1278,8 @@ local function OnFrameShow(self)
     if self.customCastBar then
         ResetCastBar(self.customCastBar)
     end
+
+    CaptureOriginalColor(self)
 
     local hl = self.highlight
     local hb = self.healthBar
@@ -1561,6 +1518,12 @@ local function SkinNameplate(frame)
 
     frame.healthBar = healthBar
     frame.castBar = castBar
+
+    -- Захват родного цвета полоски до того, как мы её перекрасим
+    if healthBar then
+        local cr, cg, cb = healthBar:GetStatusBarColor()
+        frame._origBarColor = { r = cr, g = cg, b = cb }
+    end
 
     frame.oldname = nameTextRegion
     nameTextRegion:Hide()
@@ -2023,7 +1986,7 @@ function AeonoPlates:OnEnable()
             end
         end
 
-       frameOrderAccum = frameOrderAccum + elapsed
+        frameOrderAccum = frameOrderAccum + elapsed
         if frameOrderAccum >= FRAME_ORDER_INTERVAL then
             frameOrderAccum = 0
             ReorderFrameLevels()
