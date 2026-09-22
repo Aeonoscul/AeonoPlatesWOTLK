@@ -347,17 +347,6 @@ local options = {
                             get = getValue("highlightBlend"),
                             set = setValue("highlightBlend")
                         },
-                        inset = {
-                            type = "range",
-                            name = "Inset",
-                            desc = "Negative value - highlight extends beyond health bar; positive - shrinks inward.",
-                            min = -20,
-                            max = 20,
-                            step = 1,
-                            order = 5,
-                            get = getValue("highlightInset"),
-                            set = setValue("highlightInset")
-                        }
                     }
                 },
 

@@ -245,10 +245,7 @@ ns.defaults = {
             a = 0.75
         },
         highlightBlend = "ADD",
-        highlightInset = -2,
 
-        ClickboxWidth = 110,
-        ClickboxHeight = 15,
         minimap = {
             hide = false,
             minimapPos = 125.36,
@@ -405,7 +402,6 @@ function ns.RefreshConfig(addon)
 
     cfg.highlightColor = p.highlightColor
     cfg.highlightBlend = p.highlightBlend
-    cfg.highlightInset = p.highlightInset
 
     local function resolveMedia(mediatype, key, fallback)
         if type(key) ~= "string" or key == "" then

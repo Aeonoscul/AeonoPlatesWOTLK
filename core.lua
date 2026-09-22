@@ -147,7 +147,11 @@ local function CaptureOriginalColor(frame)
         return
     end
     local r, g, b = hb:GetStatusBarColor()
-    frame._origBarColor = { r = r, g = g, b = b }
+    frame._origBarColor = {
+        r = r,
+        g = g,
+        b = b
+    }
 end
 
 local function GetPlateType(frame)
@@ -249,7 +253,6 @@ end
 local function ResetPlateColorCache(frame)
     frame._hpType = nil
     frame._classColor = nil
-    -- _origBarColor не сбрасываем — это источник истины для детекта типа
 end
 
 local FRAME_LEVELS_PER_PLATE = 3
@@ -335,18 +338,7 @@ local function GetHighlightRegion(frame)
     if not frame then
         return
     end
-    if frame.extended and frame.extended.regions then
-        if frame.extended.regions.highlight then
-            return frame.extended.regions.highlight
-        end
-        if frame.extended.regions.highlightTexture then
-            return frame.extended.regions.highlightTexture
-        end
-    elseif frame.aloftData and frame.aloftData.highlightRegion then
-        return frame.aloftData.highlightRegion
-    elseif frame.highlight then
-        return frame.highlight
-    end
+
     local byIndex = select(regionIndex.highlightTexture, frame:GetRegions())
     if byIndex then
         return byIndex
@@ -1268,13 +1260,7 @@ end
 
 local function OnFrameShow(self)
     visibleFrames[self] = true
-    if cfg.stackingEnabled then
-        stackableFrames[self] = {
-            xpos = 0,
-            ypos = 0,
-            position = 0
-        }
-    end
+    SetStackingForFrame(self, cfg.stackingEnabled)
     if self.customCastBar then
         ResetCastBar(self.customCastBar)
     end
@@ -1517,12 +1503,15 @@ local function SkinNameplate(frame)
     end
 
     frame.healthBar = healthBar
-    frame.castBar = castBar
 
     -- Захват родного цвета полоски до того, как мы её перекрасим
     if healthBar then
         local cr, cg, cb = healthBar:GetStatusBarColor()
-        frame._origBarColor = { r = cr, g = cg, b = cb }
+        frame._origBarColor = {
+            r = cr,
+            g = cg,
+            b = cb
+        }
     end
 
     frame.oldname = nameTextRegion
@@ -1550,7 +1539,6 @@ local function SkinNameplate(frame)
     frame.level = levelTextRegion
     levelTextRegion:SetFont(media.levelFont, cfg.LvLFontSize, cfg.LvLFlags or "OUTLINE")
     ApplyTextShadow(levelTextRegion, cfg.LvLShadow, cfg.LvLShadowX, cfg.LvLShadowY, cfg.LvLShadowColor)
-    frame.boss = bossIconRegion
 
     frame.raidIcon = raidIconRegion
     raidIconRegion:SetSize(cfg.raidIconSize, cfg.raidIconSize)
@@ -1686,20 +1674,13 @@ local function SkinNameplate(frame)
         end
     end
 
-    frame.oldglow = glowRegion
     frame:SetScript("OnHide", OnFrameHide)
     frame:SetScript("OnShow", OnFrameShow)
 
     styledFrames[frame] = true
     if frame:IsShown() then
         visibleFrames[frame] = true
-        if cfg.stackingEnabled then
-            stackableFrames[frame] = {
-                xpos = 0,
-                ypos = 0,
-                position = 0
-            }
-        end
+        SetStackingForFrame(frame, cfg.stackingEnabled)
     end
     frame.stateIcon = stateIconRegion
 
