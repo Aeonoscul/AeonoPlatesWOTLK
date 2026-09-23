@@ -494,12 +494,26 @@ local function PlateMatchesUnit(frame, unit)
     if not frame:IsShown() then
         return false
     end
-    if unit == "target" then
-        return UnitExists("target") and frame:GetAlpha() > 0.99
-    end
     if not UnitExists(unit) then
         return false
     end
+
+    if unit == "target" then
+        if not (frame:GetAlpha() > 0.99) then
+            return false
+        end
+        local unitName = UnitName("target")
+        local plateName = frame.oldname:GetText() or ""
+        plateName = string.gsub(plateName, "%s%(%*%)", "")
+        plateName = plateName:match("([^%-]+)") or plateName
+        if plateName ~= unitName then
+            return false
+        end
+        local unitHP = UnitHealth("target") or 0
+        local plateHP = frame.healthBar:GetValue() or 0
+        return math.abs(plateHP - unitHP) < 0.5
+    end
+
     if frame._unit then
         if frame._unit ~= unit then
             return false
@@ -843,9 +857,13 @@ local function HealthBar_OnValueChanged(self, value)
     if not frame then
         return
     end
+    frame._healthAccum = (frame._healthAccum or 0) + 1
+    if frame._healthAccum < 6 then
+        return
+    end
+    frame._healthAccum = 0
     RefreshHealthText(frame)
     RefreshHealthPercent(frame)
-    ApplyHealthBarColor(frame)
 end
 
 function AeonoPlates:ReskinFrame(frame)
@@ -1293,6 +1311,7 @@ local function OnFrameShow(self)
     ApplyHealthBarColor(self)
     ApplyNameColor(self)
     ApplyClassificationIcon(self)
+    self._healthAccum = 0
 end
 
 local function FinishCast(cb, success, now)
@@ -1504,7 +1523,6 @@ local function SkinNameplate(frame)
 
     frame.healthBar = healthBar
 
-    -- Захват родного цвета полоски до того, как мы её перекрасим
     if healthBar then
         local cr, cg, cb = healthBar:GetStatusBarColor()
         frame._origBarColor = {
@@ -1789,22 +1807,37 @@ function AeonoPlates:OnInitialize()
 end
 
 function AeonoPlates:_RefreshTargetCastBars()
-    local hasTarget = UnitExists("target")
+    if not UnitExists("target") then
+        return
+    end
+    local tName = UnitName("target")
+    if not tName then
+        return
+    end
+    tName = tName:gsub("%s*%(%*%)", "")
+
+    local tHP = UnitHealth("target") or 0
+
     for frame in pairs(visibleFrames) do
         local cb = frame.customCastBar
-        if cb then
+        if cb and not cb._casting and not cb._channeling then
             local hl = frame.highlight
-            local isMO = hl and hl:IsShown()
-            local isT = hasTarget and frame:GetAlpha() > 0.99
-            if isMO then
-
-            elseif isT then
-                local name = UnitCastingInfo("target")
-                if not name then
-                    name = UnitChannelInfo("target")
-                end
-                if name and not cb._casting and not cb._channeling then
-                    SyncCastBarFromUnit(cb, "target")
+            if not (hl and hl:IsShown()) then
+                if frame:GetAlpha() > 0.99 then
+                    local pName = frame.oldname and frame.oldname:GetText()
+                    if pName then
+                        pName = pName:gsub("%s*%(%*%)", "")
+                        local pHP = frame.healthBar and frame.healthBar:GetValue() or 0
+                        if pName == tName and math.abs(pHP - tHP) < 0.5 then
+                            local name = UnitCastingInfo("target")
+                            if not name then
+                                name = UnitChannelInfo("target")
+                            end
+                            if name then
+                                SyncCastBarFromUnit(cb, "target")
+                            end
+                        end
+                    end
                 end
             end
         end
@@ -1822,33 +1855,6 @@ function AeonoPlates:OnTargetChanged()
         end)
     end
     f:Show()
-end
-
-function AeonoPlates:OnNameplateUnitUpdated(event, unit)
-    if not unit or not unit:find("nameplate") then
-        return
-    end
-    local plate = C_NamePlate and C_NamePlate.GetNamePlateForUnit and C_NamePlate.GetNamePlateForUnit(unit)
-    if not plate then
-        return
-    end
-    local frame = plate
-    if not styledFrames[frame] then
-        return
-    end
-    if not frame.oldname or not frame.name then
-        return
-    end
-
-    local nameString = frame.oldname:GetText()
-    if nameString ~= frame._lastNameString then
-        frame._lastNameString = nameString
-        frame.name:SetText(nameString or "")
-        ResetPlateColorCache(frame)
-        ApplyHealthBarColor(frame)
-    end
-    ApplyNameColor(frame)
-    ApplyClassificationIcon(frame)
 end
 
 function AeonoPlates:OnFactionChanged()
@@ -1984,7 +1990,6 @@ function AeonoPlates:OnEnable()
     end)
 
     self:RegisterEvent("PLAYER_TARGET_CHANGED", "OnTargetChanged")
-    self:RegisterEvent("UNIT_NAME_UPDATE", "OnNameplateUnitUpdated")
     self:RegisterEvent("UNIT_FACTION", "OnFactionChanged")
     self:RegisterEvent("PLAYER_ENTERING_WORLD", "OnGroupChanged")
     self:RegisterEvent("PARTY_MEMBERS_CHANGED", "OnGroupChanged")
