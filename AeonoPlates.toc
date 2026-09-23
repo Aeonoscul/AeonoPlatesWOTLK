@@ -2,7 +2,7 @@
 ## Title: AeonoPlates [3.3.5]
 ## Notes: Nameplate addon
 ## Author: Aeonoscul
-## Version: 1.0.2
+## Version: 1.0.3.1
 ## SavedVariables: AeonoPlatesDB
 ## OptionalDeps: Ace3, LibNameplates-1.0
 
