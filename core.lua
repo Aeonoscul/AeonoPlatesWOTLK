@@ -15,9 +15,6 @@ ns.media = media
 local SyncCastBarFromUnit
 local CastBar_OnUpdate
 
-local styledFrames = setmetatable({}, {
-    __mode = "k"
-})
 local visibleFrames = setmetatable({}, {
     __mode = "k"
 })
@@ -857,11 +854,6 @@ local function HealthBar_OnValueChanged(self, value)
     if not frame then
         return
     end
-    frame._healthAccum = (frame._healthAccum or 0) + 1
-    if frame._healthAccum < 6 then
-        return
-    end
-    frame._healthAccum = 0
     RefreshHealthText(frame)
     RefreshHealthPercent(frame)
 end
@@ -1058,7 +1050,7 @@ local function SetStackingForFrame(frame, enabled)
 end
 
 function AeonoPlates:ReskinAll()
-    for frame in pairs(styledFrames) do
+    for frame in pairs(visibleFrames) do
         self:ReskinFrame(frame)
         if frame:IsShown() then
             SetStackingForFrame(frame, cfg.stackingEnabled)
@@ -1285,6 +1277,8 @@ local function OnFrameShow(self)
 
     CaptureOriginalColor(self)
 
+    AeonoPlates:ReskinFrame(self) 
+
     local hl = self.highlight
     local hb = self.healthBar
     if hl and hb then
@@ -1311,7 +1305,6 @@ local function OnFrameShow(self)
     ApplyHealthBarColor(self)
     ApplyNameColor(self)
     ApplyClassificationIcon(self)
-    self._healthAccum = 0
 end
 
 local function FinishCast(cb, success, now)
@@ -1695,7 +1688,6 @@ local function SkinNameplate(frame)
     frame:SetScript("OnHide", OnFrameHide)
     frame:SetScript("OnShow", OnFrameShow)
 
-    styledFrames[frame] = true
     if frame:IsShown() then
         visibleFrames[frame] = true
         SetStackingForFrame(frame, cfg.stackingEnabled)
@@ -1718,7 +1710,7 @@ local function HookFrames(...)
     for index = 1, select("#", ...) do
         local frame = select(index, ...)
         local region = frame:GetRegions()
-        if (not styledFrames[frame] and not frame:GetName() and region and region:GetObjectType() == "Texture" and
+        if (not visibleFrames[frame] and not frame:GetName() and region and region:GetObjectType() == "Texture" and
             region:GetTexture() == [=[Interface\TargetingFrame\UI-TargetingFrame-Flash]=]) then
             SkinNameplate(frame)
         end
@@ -1858,20 +1850,16 @@ function AeonoPlates:OnTargetChanged()
 end
 
 function AeonoPlates:OnFactionChanged()
-    for frame in pairs(styledFrames) do
-        frame._hpType = nil
-    end
     for frame in pairs(visibleFrames) do
+        frame._hpType = nil
         ApplyHealthBarColor(frame)
     end
 end
 
 function AeonoPlates:OnGroupChanged()
     UpdateFriendClassInfo()
-    for frame in pairs(styledFrames) do
-        frame._hpType = nil
-    end
     for frame in pairs(visibleFrames) do
+        frame._hpType = nil
         ApplyHealthBarColor(frame)
     end
 end
@@ -1904,7 +1892,7 @@ function AeonoPlates:OnEnable()
 
         if lastStackingEnabled ~= cfg.stackingEnabled then
             lastStackingEnabled = cfg.stackingEnabled
-            for frame in pairs(styledFrames) do
+            for frame in pairs(visibleFrames) do
                 if frame:IsShown() then
                     SetStackingForFrame(frame, cfg.stackingEnabled)
                 end
