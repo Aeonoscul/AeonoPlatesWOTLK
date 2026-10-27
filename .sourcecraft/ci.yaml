@@ -1,0 +1,74 @@
+on:
+  push:
+    - workflows: auto-release
+      filter:
+        branches: master
+        paths: "**/*.toc"
+
+workflows:
+  auto-release:
+    tasks:
+      - name: release-task
+        cubes:
+          # 1. Читаем версию из .toc
+          - name: read-version
+            script:
+              - |
+                TOC_FILE=$(find . -maxdepth 2 -name "*.toc" | head -n 1)
+                if [ -z "$TOC_FILE" ]; then
+                  echo "Error: .toc file not found!"
+                  exit 1
+                fi
+                VERSION=$(grep -i "## Version:" "$TOC_FILE" | awk -F ':' '{print $2}' | tr -d ' \r\n')
+                if [ -z "$VERSION" ]; then
+                  echo "Error: '## Version:' is empty!"
+                  exit 1
+                fi
+                echo "Detected version: $VERSION"
+                echo "VERSION=$VERSION" >> $SOURCECRAFT_ENV
+
+          # 2. Проверяем наличие релиза, создаём архив, релиз и загружаем ресурс
+          - name: create-release
+            script:
+              - |
+                set -e
+                VERSION="$VERSION"
+                ORG="aeonoscul"
+                REPO="aeonoplateswotlk"
+                API="https://api.sourcecraft.tech"
+                AUTH="Authorization: Bearer $SOURCECRAFT_TOKEN"
+
+                # Проверяем, существует ли уже релиз с такой версией
+                HTTP_CODE=$(curl -s -o /tmp/release_check.json -w "%{http_code}" \
+                  --request GET --header "$AUTH" \
+                  --url "$API/repos/$ORG/$REPO/releases/tag/$VERSION" || true)
+                if [ "$HTTP_CODE" = "200" ]; then
+                  echo "Release $VERSION already exists. Skipping."
+                  exit 0
+                fi
+                if [ "$HTTP_CODE" != "404" ]; then
+                  echo "Unexpected API response (HTTP $HTTP_CODE):"
+                  cat /tmp/release_check.json
+                  exit 1
+                fi
+                echo "Release $VERSION does not exist. Will create."
+
+                # Создаём архив с папкой "AeonoPlates" внутри
+                git archive --format=zip HEAD --prefix="AeonoPlates/" -o "AeonoPlates-${VERSION}.zip"
+                ls -lh "AeonoPlates-${VERSION}.zip"
+
+                # Создаём релиз через REST API SourceCraft
+                curl -s --fail-with-body --request POST --header "$AUTH" \
+                  --header "Content-Type: application/json" \
+                  --data "{\"tag\":\"$VERSION\",\"target_branch\":\"master\",\"title\":\"v$VERSION\",\"release_notes\":\"Auto release v$VERSION\",\"publish\":true}" \
+                  --url "$API/repos/$ORG/$REPO/releases" | tee /tmp/release_create.json
+                echo
+
+                # Загружаем архив как ресурс релиза
+                curl -s --fail-with-body --request POST --header "$AUTH" \
+                  --form "file=@AeonoPlates-${VERSION}.zip" \
+                  --form "name=AeonoPlates-${VERSION}.zip" \
+                  --url "$API/repos/$ORG/$REPO/releases/tag/$VERSION/attachments" | tee /tmp/release_asset.json
+                echo
+
+                echo "Release $VERSION created successfully."
