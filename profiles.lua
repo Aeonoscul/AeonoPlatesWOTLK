@@ -63,7 +63,7 @@ ns.defaults = {
         },
         HPtextPoint = "RIGHT",
         HPtextRelativePoint = "RIGHT",
-        HPtextX = -30,
+        HPtextX = -33,
         HPtextY = 0,
 
         HPpctShow = true,
@@ -87,7 +87,7 @@ ns.defaults = {
         font = "Friz Quadrata TT",
         NameFontSize = 12,
         NameFlags = "OUTLINE",
-        NameWidth = 95,
+        NameWidth = 94,
         NameColor = {
             r = 0.964,
             g = 0.929,
@@ -229,6 +229,20 @@ ns.defaults = {
         CBnameRelativePoint = "LEFT",
         CBnameX = 3,
         CBnameY = 0,
+
+        CBsparkShow = true,
+        CBsparkTex = "Interface\\AddOns\\AeonoPlates\\Media\\spark\\spark.tga",
+        CBsparkWidth = 15,
+        CBsparkHeight = 25,
+        CBsparkColor = {
+            r = 1,
+            g = 1,
+            b = 1,
+            a = 1
+        },
+        CBsparkBlend = "ADD",
+        CBsparkOffsetX = -1,
+        CBsparkOffsetY = 0,
 
         stackingEnabled = true,
         stackingFreezeMouseover = true,
@@ -393,6 +407,15 @@ function ns.RefreshConfig(addon)
     cfg.CBnameX = p.CBnameX
     cfg.CBnameY = p.CBnameY
 
+    cfg.CBsparkShow = p.CBsparkShow
+    cfg.CBsparkTex = p.CBsparkTex
+    cfg.CBsparkWidth = p.CBsparkWidth
+    cfg.CBsparkHeight = p.CBsparkHeight
+    cfg.CBsparkColor = p.CBsparkColor
+    cfg.CBsparkBlend = p.CBsparkBlend
+    cfg.CBsparkOffsetX = p.CBsparkOffsetX
+    cfg.CBsparkOffsetY = p.CBsparkOffsetY
+
     cfg.stackingEnabled = p.stackingEnabled
     cfg.stackingFreezeMouseover = p.stackingFreezeMouseover
     cfg.stackingXSpace = p.stackingXSpace
@@ -448,6 +471,7 @@ function ns.RefreshConfig(addon)
     media.healthFont = resolveMedia("font", p.HPtextFont or p.font, "Fonts\\FRIZQT__.TTF")
     media.healthPctFont = resolveMedia("font", p.HPpctFont or p.font, "Fonts\\FRIZQT__.TTF")
     media.highlightTex = resolveBgMedia(p.highlightTex, "Interface\\Buttons\\WHITE8x8")
+    media.sparkTex = resolveBgMedia(p.CBsparkTex, "Interface\\AddOns\\AeonoPlates\\Media\\spark\\spark.tga")
 
     SetCVar("ShowClassColorInNameplate", 1)
 end

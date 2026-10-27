@@ -1447,6 +1447,88 @@ local options = {
                             set = setValue("CBnameY")
                         }
                     }
+                },
+
+                spark = {
+                    type = "group",
+                    name = "Spark",
+                    order = 5,
+                    args = {
+                        show = {
+                            type = "toggle",
+                            name = "Show Spark",
+                            desc = "Show a glowing marker at the leading edge of the castbar.",
+                            order = 1,
+                            get = getValue("CBsparkShow"),
+                            set = setValue("CBsparkShow")
+                        },
+                        spacer1 = spacer(2),
+
+                        width = {
+                            type = "range",
+                            name = "Width",
+                            min = 1,
+                            max = 32,
+                            step = 1,
+                            order = 10,
+                            get = getValue("CBsparkWidth"),
+                            set = setValue("CBsparkWidth")
+                        },
+                        height = {
+                            type = "range",
+                            name = "Height (0 = auto)",
+                            desc = "0 = castbar height + 4 px.",
+                            min = 0,
+                            max = 48,
+                            step = 1,
+                            order = 11,
+                            get = getValue("CBsparkHeight"),
+                            set = setValue("CBsparkHeight")
+                        },
+                        color = {
+                            type = "color",
+                            name = "Color",
+                            hasAlpha = true,
+                            order = 12,
+                            get = getColorAlpha("CBsparkColor"),
+                            set = setColorAlpha("CBsparkColor")
+                        },
+                        blend = {
+                            type = "select",
+                            name = "Blend Mode",
+                            desc = "Additive = bright glow, Blend = plain overlay.",
+                            values = {
+                                ADD = "Additive",
+                                BLEND = "Blend"
+                            },
+                            order = 13,
+                            get = getValue("CBsparkBlend"),
+                            set = setValue("CBsparkBlend")
+                        },
+
+                        spacer2 = spacer(30),
+
+                        offsetX = {
+                            type = "range",
+                            name = "X Offset",
+                            min = -50,
+                            max = 50,
+                            step = 1,
+                            order = 20,
+                            get = getValue("CBsparkOffsetX"),
+                            set = setValue("CBsparkOffsetX")
+                        },
+                        offsetY = {
+                            type = "range",
+                            name = "Y Offset",
+                            min = -50,
+                            max = 50,
+                            step = 1,
+                            order = 21,
+                            get = getValue("CBsparkOffsetY"),
+                            set = setValue("CBsparkOffsetY")
+                        }
+                    }
                 }
             }
         },

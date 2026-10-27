@@ -399,6 +399,59 @@ local function ApplyCastBarColor(cb)
     end
 end
 
+local function ApplyCastBarSpark(cb)
+    if not cb then
+        return
+    end
+    local spark = cb.spark
+    if not spark then
+        spark = cb:CreateTexture(nil, "ARTWORK", nil, 7)
+        cb.spark = spark
+    end
+    spark:SetTexture(media.sparkTex)
+    spark:SetBlendMode(cfg.CBsparkBlend or "ADD")
+    local c = cfg.CBsparkColor
+    if c then
+        spark:SetVertexColor(c.r or 1, c.g or 1, c.b or 1, c.a or 1)
+    else
+        spark:SetVertexColor(1, 1, 1, 1)
+    end
+    local w = (cfg.CBsparkWidth and cfg.CBsparkWidth > 0) and cfg.CBsparkWidth or 8
+    local h = (cfg.CBsparkHeight and cfg.CBsparkHeight > 0) and cfg.CBsparkHeight or (cb:GetHeight() + 4)
+    spark:SetSize(w, h)
+    if cfg.CBsparkShow then
+        spark:Show()
+    else
+        spark:Hide()
+    end
+end
+
+local function UpdateCastBarSpark(cb)
+    local spark = cb.spark
+    if not spark then
+        return
+    end
+    if not cfg.CBsparkShow then
+        spark:Hide()
+        return
+    end
+    local _, max = cb:GetMinMaxValues()
+    local value = cb:GetValue()
+    if not max or max <= 0 or value == nil then
+        spark:Hide()
+        return
+    end
+    local pct = value / max
+    if pct < 0 then
+        pct = 0
+    elseif pct > 1 then
+        pct = 1
+    end
+    spark:ClearAllPoints()
+    spark:SetPoint("CENTER", cb, "LEFT", cb:GetWidth() * pct + (cfg.CBsparkOffsetX or 0), cfg.CBsparkOffsetY or 0)
+    spark:Show()
+end
+
 local function ActivateCastBarOnUpdate(cb)
     if not cb._updateActive then
         cb._updateActive = true
@@ -460,6 +513,7 @@ SyncCastBarFromUnit = function(cb, unit)
     end
     ActivateCastBarOnUpdate(cb)
     cb:Show()
+    UpdateCastBarSpark(cb)
 end
 
 local function ResetCastBar(cb)
@@ -480,6 +534,9 @@ local function ResetCastBar(cb)
     end
     if cb.Icon then
         cb.Icon:SetTexture(nil)
+    end
+    if cb.spark then
+        cb.spark:Hide()
     end
     DeactivateCastBarOnUpdate(cb)
 end
@@ -870,6 +927,10 @@ function AeonoPlates:ReskinFrame(frame)
 
     ApplyHealthBarColor(frame)
 
+    if frame.customCastBar then
+        ApplyCastBarSpark(frame.customCastBar)
+    end
+
     if not IsAppearanceOutdated(frame, healthBar) then
         ApplyNameColor(frame)
         ApplyClassificationIcon(frame)
@@ -939,6 +1000,7 @@ function AeonoPlates:ReskinFrame(frame)
         castbar:SetStatusBarTexture(media.cbBarTex)
         castbar:ClearAllPoints()
         castbar:SetPoint(cfg.CBpoint, healthBar, cfg.CBrelativePoint, cfg.CBx, cfg.CBy)
+        ApplyCastBarSpark(castbar)
 
         if castbar.Border then
             castbar.Border:SetTexture(media.cbBgTex)
@@ -1318,6 +1380,9 @@ local function FinishCast(cb, success, now)
     if c then
         cb:SetStatusBarColor(c.r or 1, c.g or 1, c.b or 1, c.a or 1)
     end
+    if cb.spark then
+        cb.spark:Hide()
+    end
     if cb.name and cfg.CBshowName then
         cb.name:SetText(success and "Success" or "Failed")
     end
@@ -1362,6 +1427,7 @@ local function CastBar_OnEvent(self, event, ...)
         end
         ActivateCastBarOnUpdate(self)
         self:Show()
+        UpdateCastBarSpark(self)
     elseif event == "UNIT_SPELLCAST_CHANNEL_START" then
         local name, _, _, texture, startTime, endTime, _, notInterruptible = UnitChannelInfo(unit)
         if not name then
@@ -1386,6 +1452,7 @@ local function CastBar_OnEvent(self, event, ...)
         end
         ActivateCastBarOnUpdate(self)
         self:Show()
+        UpdateCastBarSpark(self)
     elseif event == "UNIT_SPELLCAST_STOP" or event == "UNIT_SPELLCAST_CHANNEL_STOP" then
         if self._casting or self._channeling then
             FinishCast(self, true)
@@ -1404,6 +1471,7 @@ local function CastBar_OnEvent(self, event, ...)
                 self:SetMinMaxValues(0, self._max)
                 self:SetValue(self._duration)
                 ApplyCastBarColor(self)
+                UpdateCastBarSpark(self)
             end
         end
     elseif event == "UNIT_SPELLCAST_CHANNEL_UPDATE" then
@@ -1416,6 +1484,7 @@ local function CastBar_OnEvent(self, event, ...)
                 self:SetMinMaxValues(0, self._max)
                 self:SetValue(self._duration)
                 ApplyCastBarColor(self)
+                UpdateCastBarSpark(self)
             end
         end
     end
@@ -1443,19 +1512,23 @@ CastBar_OnUpdate = function(self, elapsed)
         local d = (self._duration or 0) + elapsed
         if d >= self._max then
             self:SetValue(self._max)
+            UpdateCastBarSpark(self)
             FinishCast(self, true, now)
         else
             self._duration = d
             self:SetValue(d)
+            UpdateCastBarSpark(self)
         end
     elseif self._channeling then
         local d = (self._duration or 0) - elapsed
         if d <= 0 then
             self:SetValue(0)
+            UpdateCastBarSpark(self)
             FinishCast(self, true, now)
         else
             self._duration = d
             self:SetValue(d)
+            UpdateCastBarSpark(self)
         end
     end
     if self._fadeOut then
@@ -1674,6 +1747,7 @@ local function SkinNameplate(frame)
     end
 
     frame.customCastBar = castbar
+    ApplyCastBarSpark(castbar)
     castbar:Hide()
     castbar:SetAlpha(1)
 
