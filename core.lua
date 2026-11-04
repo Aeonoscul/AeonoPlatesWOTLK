@@ -5,6 +5,9 @@ local AeonoPlates = AceAddon:NewAddon(addonName, "AceEvent-3.0", "AceConsole-3.0
 ns.addon = AeonoPlates
 
 local LSM = LibStub("LibSharedMedia-3.0")
+local LibNameplates = LibStub("LibNameplates-1.0", true)
+local LDB = LibStub("LibDataBroker-1.1")
+local AceConfigDialog = LibStub("AceConfigDialog-3.0")
 
 local defaults = ns.defaults
 local cfg = ns.cfg
@@ -14,10 +17,9 @@ ns.media = media
 
 local SyncCastBarFromUnit
 local CastBar_OnUpdate
+local SkinNameplate
 
-local visibleFrames = setmetatable({}, {
-    __mode = "k"
-})
+local visibleFrames = setmetatable({}, { __mode = "k" })
 local stackableFrames = {}
 
 local function ApplyClassificationIcon(frame)
@@ -25,12 +27,10 @@ local function ApplyClassificationIcon(frame)
     if not icon then
         return
     end
-
     if icon:GetTexture() == "Interface\\Tooltips\\EliteNameplateIcon" then
         icon:SetTexture("Interface\\AddOns\\AeonoPlates\\Media\\icon\\elite.tga")
         icon:SetTexCoord(0, 1, 0, 1)
     end
-
     icon:ClearAllPoints()
     icon:SetPoint(cfg.classifyPoint, frame.healthBar, cfg.classifyRelativePoint, cfg.classifyX, cfg.classifyY)
     icon:SetSize(cfg.classifySize, cfg.classifySize)
@@ -46,6 +46,29 @@ local function ApplyNameColor(frame)
         name:SetTextColor(c.r or 1, c.g or 1, c.b or 1)
     else
         name:SetTextColor(1, 1, 1)
+    end
+end
+
+local LEVEL_COLORS = {
+    trivial       = { r = 0.50, g = 0.50, b = 0.50 },
+    standard      = { r = 0.25, g = 0.75, b = 0.25 },
+    difficult     = { r = 1.00, g = 0.82, b = 0.00 },
+    verydifficult = { r = 1.00, g = 0.50, b = 0.00 },
+    impossible    = { r = 1.00, g = 0.10, b = 0.10 },
+}
+
+local function ApplyLevelColor(frame)
+    if not LibNameplates or not frame.level then
+        return
+    end
+    local level = LibNameplates:GetLevel(frame)
+    if not level or level <= 0 then
+        return
+    end
+    local diff = LibNameplates:GetLevelDifficulty(frame)
+    local c = diff and LEVEL_COLORS[diff]
+    if c then
+        frame.level:SetTextColor(c.r, c.g, c.b)
     end
 end
 
@@ -144,11 +167,7 @@ local function CaptureOriginalColor(frame)
         return
     end
     local r, g, b = hb:GetStatusBarColor()
-    frame._origBarColor = {
-        r = r,
-        g = g,
-        b = b
-    }
+    frame._origBarColor = { r = r, g = g, b = b }
 end
 
 local function GetPlateType(frame)
@@ -204,6 +223,16 @@ local function GetColorForType(frame, unitType)
     return nil
 end
 
+local THREAT_COLOR_HOLD = { r = 0.20, g = 1.00, b = 0.20 }
+local THREAT_COLOR_SLIP = { r = 1.00, g = 0.65, b = 0.00 }
+
+local function SetBarColor(hb, c)
+    local cr, cg, cb = hb:GetStatusBarColor()
+    if cr ~= c.r or cg ~= c.g or cb ~= c.b then
+        hb:SetStatusBarColor(c.r, c.g, c.b)
+    end
+end
+
 local function ApplyHealthBarColor(frame)
     local hb = frame.healthBar
     if not hb then
@@ -217,6 +246,33 @@ local function ApplyHealthBarColor(frame)
         return
     end
 
+    if frame._hpType == "enemy_npc" or frame._hpType == "neutral" then
+        local threatTex = frame.threatGlow
+        
+        if threatTex then
+            if threatTex:IsShown() then
+                -- Моб В БОЮ! Смотрим на цвет текстуры угрозы Blizzard
+                local r, g, b = threatTex:GetVertexColor()
+                
+                if r > 0.7 and g < 0.5 then
+                    -- Красная текстура -> ты держишь агро
+                    SetBarColor(hb, THREAT_COLOR_HOLD) -- Зеленый
+                    return
+                elseif g > 0.7 and r < 0.7 then
+                    -- Зеленая текстура -> танк держит, а ты нет
+                    SetBarColor(hb, THREAT_COLOR_LOST) -- Красный
+                    return
+                else
+                    -- Желтая/Оранжевая текстура -> вот-вот сорвется
+                    SetBarColor(hb, THREAT_COLOR_SLIP) -- Желто-оранжевый
+                    return
+                end
+            end
+            -- Если threatTex скрыт (IsShown == false), значит моб ВНЕ БОЯ.
+            -- Код идет дальше и красит бар в дефолтный цвет.
+        end
+    end
+
     if frame._hpType == "enemy_player" and not frame._classColor then
         local cr, cg, cb
         if frame._origBarColor then
@@ -226,11 +282,7 @@ local function ApplyHealthBarColor(frame)
         end
         for _, c in pairs(RAID_CLASS_COLORS) do
             if math.abs(cr - c.r) < 0.01 and math.abs(cg - c.g) < 0.01 and math.abs(cb - c.b) < 0.01 then
-                frame._classColor = {
-                    r = c.r,
-                    g = c.g,
-                    b = c.b
-                }
+                frame._classColor = { r = c.r, g = c.g, b = c.b }
                 break
             end
         end
@@ -241,10 +293,7 @@ local function ApplyHealthBarColor(frame)
         return
     end
 
-    local cr, cg, cb = hb:GetStatusBarColor()
-    if cr ~= color.r or cg ~= color.g or cb ~= color.b then
-        hb:SetStatusBarColor(color.r, color.g, color.b)
-    end
+    SetBarColor(hb, color)
 end
 
 local function ResetPlateColorCache(frame)
@@ -259,7 +308,6 @@ local STACK_DELTA_FALLBACK = 3
 local HIGHLIGHT_REANCHOR_INTERVAL = 0.5
 
 local previousFrameOrder = {}
-local worldFrameChildCount = -1
 local mouseoverFrame = nil
 
 local regionIndex = {
@@ -293,12 +341,7 @@ local function UpdateBorderFrame(bf, anchorTarget, tex, size, inset, colorR, col
         bf:SetBackdrop({
             edgeFile = tex,
             edgeSize = size,
-            insets = {
-                left = 0,
-                right = 0,
-                top = 0,
-                bottom = 0
-            }
+            insets = { left = 0, right = 0, top = 0, bottom = 0 }
         })
     end
 
@@ -335,7 +378,6 @@ local function GetHighlightRegion(frame)
     if not frame then
         return
     end
-
     local byIndex = select(regionIndex.highlightTexture, frame:GetRegions())
     if byIndex then
         return byIndex
@@ -539,63 +581,6 @@ local function ResetCastBar(cb)
         cb.spark:Hide()
     end
     DeactivateCastBarOnUpdate(cb)
-end
-
-local function PlateMatchesUnit(frame, unit)
-    if not frame or not frame.oldname or not frame.healthBar then
-        return false
-    end
-    if not frame:IsShown() then
-        return false
-    end
-    if not UnitExists(unit) then
-        return false
-    end
-
-    if unit == "target" then
-        if not (frame:GetAlpha() > 0.99) then
-            return false
-        end
-        local unitName = UnitName("target")
-        local plateName = frame.oldname:GetText() or ""
-        plateName = string.gsub(plateName, "%s%(%*%)", "")
-        plateName = plateName:match("([^%-]+)") or plateName
-        if plateName ~= unitName then
-            return false
-        end
-        local unitHP = UnitHealth("target") or 0
-        local plateHP = frame.healthBar:GetValue() or 0
-        return math.abs(plateHP - unitHP) < 0.5
-    end
-
-    if frame._unit then
-        if frame._unit ~= unit then
-            return false
-        end
-    else
-        local unitName = UnitName(unit)
-        if not unitName then
-            return false
-        end
-        local plateName = frame.oldname:GetText() or ""
-        plateName = string.gsub(plateName, "%s%(%*%)", "")
-        if plateName ~= unitName then
-            return false
-        end
-        local unitHP = UnitHealth(unit) or 0
-        local plateHP = frame.healthBar:GetValue() or 0
-        if math.abs(plateHP - unitHP) >= 0.5 then
-            return false
-        end
-        frame._unit = unit
-    end
-    if unit == "mouseover" then
-        local hl = frame.highlight
-        if not (hl and hl:IsShown()) then
-            return false
-        end
-    end
-    return true
 end
 
 local function IsAppearanceOutdated(frame, healthBar)
@@ -933,6 +918,7 @@ function AeonoPlates:ReskinFrame(frame)
 
     if not IsAppearanceOutdated(frame, healthBar) then
         ApplyNameColor(frame)
+        ApplyLevelColor(frame)
         ApplyClassificationIcon(frame)
         return
     end
@@ -1090,17 +1076,14 @@ function AeonoPlates:ReskinFrame(frame)
     end
 
     ApplyNameColor(frame)
+    ApplyLevelColor(frame)
     ApplyClassificationIcon(frame)
 end
 
 local function SetStackingForFrame(frame, enabled)
     if enabled then
         if not stackableFrames[frame] then
-            stackableFrames[frame] = {
-                xpos = 0,
-                ypos = 0,
-                position = 0
-            }
+            stackableFrames[frame] = { xpos = 0, ypos = 0, position = 0 }
         end
     else
         if stackableFrames[frame] then
@@ -1175,7 +1158,7 @@ local function ReorderFrameLevels()
     if same then
         for i = 1, #sortBuffer do
             if previousFrameOrder[i] ~= sortBuffer[i] then
-                same = false;
+                same = false
                 break
             end
         end
@@ -1322,7 +1305,6 @@ local function OnFrameHide(self)
         self:SetClampRectInsets(0, 0, 0, 0)
     end
     self._lastNameString = nil
-    self._unit = nil
     self._origBarColor = nil
     ResetPlateColorCache(self)
     if self.customCastBar then
@@ -1339,7 +1321,7 @@ local function OnFrameShow(self)
 
     CaptureOriginalColor(self)
 
-    AeonoPlates:ReskinFrame(self) 
+    AeonoPlates:ReskinFrame(self)
 
     local hl = self.highlight
     local hb = self.healthBar
@@ -1397,9 +1379,6 @@ local function CastBar_OnEvent(self, event, ...)
     end
     local frame = self.ownerFrame
     if not frame then
-        return
-    end
-    if not PlateMatchesUnit(frame, unit) then
         return
     end
 
@@ -1494,11 +1473,56 @@ function AeonoPlates:OnSpellcastEvent(event, unit)
     if not unit or unit == "player" then
         return
     end
-    for plate in pairs(visibleFrames) do
-        local cb = plate.customCastBar
-        if cb and PlateMatchesUnit(plate, unit) then
-            CastBar_OnEvent(cb, event, unit)
-            return
+    if not LibNameplates then
+        return
+    end
+    local plate = LibNameplates:GetNameplateByUnit(unit)
+    if not plate or not visibleFrames[plate] then
+        return
+    end
+    local cb = plate.customCastBar
+    if not cb then
+        return
+    end
+    CastBar_OnEvent(cb, event, unit)
+end
+
+function AeonoPlates:LibNameplates_NewNameplate(event, plate)
+    if not plate or not plate:IsShown() then
+        return
+    end
+    if not plate.customCastBar then
+        SkinNameplate(plate)
+    else
+        OnFrameShow(plate)
+    end
+end
+
+function AeonoPlates:LibNameplates_RecycleNameplate(event, plate)
+    if plate and plate.customCastBar then
+        OnFrameHide(plate)
+    end
+end
+
+function AeonoPlates:LibNameplates_FoundGUID(event, plate, guid, unitID)
+    if not plate or not visibleFrames[plate] then
+        return
+    end
+    local cb = plate.customCastBar
+    if not cb then
+        return
+    end
+    if cb._casting or cb._channeling or cb._fadeOut then
+        return
+    end
+    if unitID then
+        SyncCastBarFromUnit(cb, unitID)
+    else
+        for _, u in ipairs({ "target", "mouseover", "focus" }) do
+            if UnitExists(u) and UnitGUID(u) == guid then
+                SyncCastBarFromUnit(cb, u)
+                return
+            end
         end
     end
 end
@@ -1545,9 +1569,29 @@ CastBar_OnUpdate = function(self, elapsed)
     end
 end
 
-local function SkinNameplate(frame)
+SkinNameplate = function(frame)
+    if frame.VirtualPlate then
+        return
+    end
+
     local children = {frame:GetChildren()}
     local regions = {frame:GetRegions()}
+
+    if LibNameplates then
+        LibNameplates.plateRegions[frame] = {
+            nameText         = regions[7],
+            levelText        = regions[8],
+            bossIcon         = regions[9],
+            raidIcon         = regions[10],
+            eliteIcon        = regions[11],
+            threatTexture    = regions[1],
+            highlightTexture = regions[6],
+        }
+        LibNameplates.plateChildren[frame] = {
+            healthBar = children[1],
+            castBar   = children[2],
+        }
+    end
 
     local healthBar = children[1]
     local castBar = children[2]
@@ -1591,11 +1635,7 @@ local function SkinNameplate(frame)
 
     if healthBar then
         local cr, cg, cb = healthBar:GetStatusBarColor()
-        frame._origBarColor = {
-            r = cr,
-            g = cg,
-            b = cb
-        }
+        frame._origBarColor = { r = cr, g = cg, b = cb }
     end
 
     frame.oldname = nameTextRegion
@@ -1759,13 +1799,7 @@ local function SkinNameplate(frame)
         end
     end
 
-    frame:SetScript("OnHide", OnFrameHide)
-    frame:SetScript("OnShow", OnFrameShow)
-
-    if frame:IsShown() then
-        visibleFrames[frame] = true
-        SetStackingForFrame(frame, cfg.stackingEnabled)
-    end
+    frame.threatGlow = glowRegion
     frame.stateIcon = stateIconRegion
 
     glowRegion:SetTexture(nil)
@@ -1778,16 +1812,10 @@ local function SkinNameplate(frame)
     ApplyHealthBarColor(frame)
     ApplyNameColor(frame)
     ApplyClassificationIcon(frame)
-end
 
-local function HookFrames(...)
-    for index = 1, select("#", ...) do
-        local frame = select(index, ...)
-        local region = frame:GetRegions()
-        if (not visibleFrames[frame] and not frame:GetName() and region and region:GetObjectType() == "Texture" and
-            region:GetTexture() == [=[Interface\TargetingFrame\UI-TargetingFrame-Flash]=]) then
-            SkinNameplate(frame)
-        end
+    if frame:IsShown() then
+        visibleFrames[frame] = true
+        SetStackingForFrame(frame, cfg.stackingEnabled)
     end
 end
 
@@ -1815,9 +1843,6 @@ function AeonoPlates:MigrateProfile()
         deepFill(self.db.profile, ns.defaults.profile)
     end
 end
-
-local LDB = LibStub("LibDataBroker-1.1")
-local AceConfigDialog = LibStub("AceConfigDialog-3.0")
 
 local minimapDataObject = LDB:NewDataObject("AeonoPlates", {
     type = "launcher",
@@ -1870,63 +1895,47 @@ function AeonoPlates:OnInitialize()
 
     LSM.RegisterCallback(self, "LibSharedMedia_Registered", "OnMediaRegistered")
     self:RefreshConfig()
+    SetCVar("threatWarning", 3)
 end
 
-function AeonoPlates:_RefreshTargetCastBars()
-    if not UnitExists("target") then
+function AeonoPlates:LibNameplates_TargetNameplate(event, plate)
+    if not plate or not visibleFrames[plate] then
         return
     end
-    local tName = UnitName("target")
-    if not tName then
+    local cb = plate.customCastBar
+    if not cb or cb._casting or cb._channeling then
         return
     end
-    tName = tName:gsub("%s*%(%*%)", "")
-
-    local tHP = UnitHealth("target") or 0
-
-    for frame in pairs(visibleFrames) do
-        local cb = frame.customCastBar
-        if cb and not cb._casting and not cb._channeling then
-            local hl = frame.highlight
-            if not (hl and hl:IsShown()) then
-                if frame:GetAlpha() > 0.99 then
-                    local pName = frame.oldname and frame.oldname:GetText()
-                    if pName then
-                        pName = pName:gsub("%s*%(%*%)", "")
-                        local pHP = frame.healthBar and frame.healthBar:GetValue() or 0
-                        if pName == tName and math.abs(pHP - tHP) < 0.5 then
-                            local name = UnitCastingInfo("target")
-                            if not name then
-                                name = UnitChannelInfo("target")
-                            end
-                            if name then
-                                SyncCastBarFromUnit(cb, "target")
-                            end
-                        end
-                    end
-                end
-            end
-        end
+    local name = UnitCastingInfo("target") or UnitChannelInfo("target")
+    if name then
+        SyncCastBarFromUnit(cb, "target")
     end
 end
 
-function AeonoPlates:OnTargetChanged()
-    local f = self._targetRefreshFrame
-    if not f then
-        f = CreateFrame("Frame")
-        self._targetRefreshFrame = f
-        f:SetScript("OnUpdate", function(f)
-            f:Hide()
-            AeonoPlates:_RefreshTargetCastBars()
-        end)
+function AeonoPlates:LibNameplates_ThreatChange(event, plate, situation)
+    if not plate or not visibleFrames[plate] then
+        return
     end
-    f:Show()
+    ApplyHealthBarColor(plate)
+end
+
+function AeonoPlates:LibNameplates_CombatChange(event, plate, inCombat)
+    if not plate or not visibleFrames[plate] then
+        return
+    end
+    ApplyHealthBarColor(plate)
 end
 
 function AeonoPlates:OnFactionChanged()
     for frame in pairs(visibleFrames) do
         frame._hpType = nil
         ApplyHealthBarColor(frame)
+    end
+end
+
+function AeonoPlates:OnPlayerLevelUp()
+    for frame in pairs(visibleFrames) do
+        ApplyLevelColor(frame)
     end
 end
 
@@ -1941,29 +1950,32 @@ end
 function AeonoPlates:OnEnable()
     self:SetupOptions()
     self:SetupMinimap()
-
     UpdateFriendClassInfo()
 
-    worldFrameChildCount = -1
+    if LibNameplates then
+        LibNameplates.RegisterCallback(self, "LibNameplates_NewNameplate")
+        LibNameplates.RegisterCallback(self, "LibNameplates_RecycleNameplate")
+        LibNameplates.RegisterCallback(self, "LibNameplates_FoundGUID")
+        LibNameplates.RegisterCallback(self, "LibNameplates_TargetNameplate")
+        LibNameplates.RegisterCallback(self, "LibNameplates_ThreatChange")
+        LibNameplates.RegisterCallback(self, "LibNameplates_CombatChange")
+
+        for plate in pairs(LibNameplates.nameplates) do
+            if plate:IsShown() and not plate.VirtualPlate then
+                AeonoPlates:LibNameplates_NewNameplate("LibNameplates_NewNameplate", plate)
+            end
+        end
+    end
+
     local frameOrderAccum = 0
     local stackAccum = 0
     local mouseoverAccum = 0
     local highlightAccum = 0
     local lastStackingEnabled = cfg.stackingEnabled
+    local lastPlayerCombat = UnitAffectingCombat("player")
 
     local scanner = CreateFrame("Frame")
-    local childScanAccum = 0
     scanner:SetScript("OnUpdate", function(_, elapsed)
-        childScanAccum = childScanAccum + elapsed
-        if childScanAccum >= 0.2 then
-            childScanAccum = 0
-            local count = WorldFrame:GetNumChildren()
-            if count ~= worldFrameChildCount then
-                worldFrameChildCount = count
-                HookFrames(WorldFrame:GetChildren())
-            end
-        end
-
         if lastStackingEnabled ~= cfg.stackingEnabled then
             lastStackingEnabled = cfg.stackingEnabled
             for frame in pairs(visibleFrames) do
@@ -1976,39 +1988,31 @@ function AeonoPlates:OnEnable()
         mouseoverAccum = mouseoverAccum + elapsed
         if mouseoverAccum >= MOUSEOVER_POLL_INTERVAL then
             mouseoverAccum = 0
+
             if mouseoverFrame then
-                local hl = mouseoverFrame.highlight
-                if hl and hl:IsShown() and mouseoverFrame:IsShown() then
-                    local cb = mouseoverFrame.customCastBar
-                    if cb then
-                        local name = UnitCastingInfo("mouseover")
-                        if not name then
-                            name = UnitChannelInfo("mouseover")
-                        end
-                        if name and not cb._casting and not cb._channeling then
-                            SyncCastBarFromUnit(cb, "mouseover")
-                        end
+                local isValid = mouseoverFrame:IsShown()
+                    and LibNameplates and LibNameplates:IsMouseover(mouseoverFrame)
+                if not isValid then
+                    if LibNameplates then
+                        LibNameplates:HideMouseoverRegion(mouseoverFrame)
                     end
-                else
                     mouseoverFrame = nil
                 end
             end
+
             if not mouseoverFrame then
                 for frame in pairs(visibleFrames) do
-                    local hl = frame.highlight
-                    if hl and hl:IsShown() and frame:IsShown() then
+                    if frame:IsShown() and LibNameplates and LibNameplates:IsMouseover(frame) then
                         mouseoverFrame = frame
                         break
                     end
                 end
             end
+
             if mouseoverFrame then
                 local cb = mouseoverFrame.customCastBar
                 if cb then
-                    local name = UnitCastingInfo("mouseover")
-                    if not name then
-                        name = UnitChannelInfo("mouseover")
-                    end
+                    local name = UnitCastingInfo("mouseover") or UnitChannelInfo("mouseover")
                     if name and not cb._casting and not cb._channeling then
                         SyncCastBarFromUnit(cb, "mouseover")
                     end
@@ -2041,6 +2045,16 @@ function AeonoPlates:OnEnable()
             ReorderFrameLevels()
         end
 
+        local inCombat = UnitAffectingCombat("player")
+        if inCombat ~= lastPlayerCombat then
+            lastPlayerCombat = inCombat
+            for frame in pairs(visibleFrames) do
+                if frame._hpType == "enemy_npc" or frame._hpType == "neutral" then
+                    ApplyHealthBarColor(frame)
+                end
+            end
+        end
+
         if cfg.stackingEnabled then
             local rate = cfg.stackingUpdateRate or 0
             stackAccum = stackAccum + elapsed
@@ -2051,10 +2065,10 @@ function AeonoPlates:OnEnable()
         end
     end)
 
-    self:RegisterEvent("PLAYER_TARGET_CHANGED", "OnTargetChanged")
     self:RegisterEvent("UNIT_FACTION", "OnFactionChanged")
     self:RegisterEvent("PLAYER_ENTERING_WORLD", "OnGroupChanged")
     self:RegisterEvent("PARTY_MEMBERS_CHANGED", "OnGroupChanged")
+    self:RegisterEvent("PLAYER_LEVEL_UP", "OnPlayerLevelUp")
     self:RegisterEvent("RAID_ROSTER_UPDATE", "OnGroupChanged")
     self:RegisterEvent("UNIT_SPELLCAST_START", "OnSpellcastEvent")
     self:RegisterEvent("UNIT_SPELLCAST_STOP", "OnSpellcastEvent")
