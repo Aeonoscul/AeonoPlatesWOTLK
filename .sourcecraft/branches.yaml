@@ -1,10 +1,16 @@
 branch_protection:
+  ## Пользователи, которым разрешено обходить политики веток
+  bypass:
+    usernames:
+      - dmitry-zverev1
+
   policies:
-    ## Защита основной ветки: без force push, без удаления
+    ## Защита основной ветки: без force push, только через PR, без удаления
     - target: default_branch
       message: "Force push into master is forbidden"
       rules:
         - prevent_force_push
+        - prevent_non_pr_changes
         - prevent_deletion
 
     ## Запрет ручного создания тегов (релизы создаются CI автоматически)
