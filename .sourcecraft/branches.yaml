@@ -1,0 +1,15 @@
+branch_protection:
+  policies:
+    ## Защита основной ветки: без force push, без удаления
+    - target: default_branch
+      message: "Force push into master is forbidden"
+      rules:
+        - prevent_force_push
+        - prevent_deletion
+
+    ## Запрет ручного создания тегов (релизы создаются CI автоматически)
+    - target: tag
+      matches: "**"
+      message: "Manual tag creation is forbidden, releases are created by CI"
+      rules:
+        - prevent_creation
