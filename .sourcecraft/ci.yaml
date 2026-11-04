@@ -5,7 +5,48 @@ on:
         branches: master
         paths: "**/*.toc"
 
+    # Проверка синтаксиса Lua при пуше в master
+    - workflows: lua-syntax-check
+      filter:
+        branches: master
+        paths: "**/*.lua"
+
+  pull_request:
+    # Проверка синтаксиса Lua при создании/обновлении ПР в master
+    - workflows: lua-syntax-check
+      filter:
+        target_branches: master
+        paths: "**/*.lua"
+
 workflows:
+  lua-syntax-check:
+    tasks:
+      - name: lint-task
+        cubes:
+          - name: lua-syntax-check
+            script:
+              - |
+                set -e
+                apt-get update && apt-get install -y --no-install-recommends lua5.1
+                echo "Checking Lua syntax (Lua 5.1)..."
+                FILES=$(find . -name "*.lua" -not -path "./Libs/*")
+                if [ -z "$FILES" ]; then
+                  echo "No .lua files found (excluding Libs/). Nothing to check."
+                  exit 0
+                fi
+                FAIL=0
+                for f in $FILES; do
+                  echo "--- $f"
+                  if ! luac5.1 -p "$f"; then
+                    FAIL=1
+                  fi
+                done
+                if [ "$FAIL" -ne 0 ]; then
+                  echo "Lua syntax check FAILED."
+                  exit 1
+                fi
+                echo "Lua syntax check passed."
+
   auto-release:
     tasks:
       - name: release-task
