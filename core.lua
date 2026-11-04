@@ -447,7 +447,7 @@ local function ApplyCastBarSpark(cb)
     end
     local spark = cb.spark
     if not spark then
-        spark = cb:CreateTexture(nil, "ARTWORK", nil, 7)
+        spark = cb:CreateTexture(nil, "ARTWORK", nil, 2)
         cb.spark = spark
     end
     spark:SetTexture(media.sparkTex)
@@ -1018,7 +1018,7 @@ function AeonoPlates:ReskinFrame(frame)
         if cfg.CBshowIcon then
             local icon = castbar.Icon
             if not icon then
-                icon = castbar:CreateTexture(nil, "ARTWORK")
+                icon = castbar:CreateTexture(nil, "ARTWORK", nil, 1)
                 castbar.Icon = icon
             end
             local iconSize = (cfg.CBiconSize and cfg.CBiconSize > 0) and cfg.CBiconSize or 16
@@ -1749,7 +1749,7 @@ SkinNameplate = function(frame)
     end
 
     if cfg.CBshowIcon then
-        castbar.Icon = castbar:CreateTexture(nil, "ARTWORK")
+        castbar.Icon = castbar:CreateTexture(nil, "ARTWORK", nil, 1)
         local iconSize = (cfg.CBiconSize and cfg.CBiconSize > 0) and cfg.CBiconSize or 16
         castbar.Icon:SetSize(iconSize, iconSize)
         castbar.Icon:SetPoint(cfg.CBiconPoint, castbar, cfg.CBiconRelativePoint, cfg.CBiconX, cfg.CBiconY)
@@ -1771,6 +1771,7 @@ SkinNameplate = function(frame)
     end
 
     castbar.name = castbar:CreateFontString(nil, "ARTWORK")
+    castbar.name:SetDrawLayer("ARTWORK", 3)
     castbar.name:SetPoint(cfg.CBnamePoint, castbar, cfg.CBnameRelativePoint, cfg.CBnameX, cfg.CBnameY)
     castbar.name:SetFont(media.nameFont or media.font, cfg.CBnameFontSize, cfg.CBnameFlags or "")
     castbar.name:SetJustifyH(GetJustifyFromAnchor(cfg.CBnamePoint))
