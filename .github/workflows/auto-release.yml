@@ -7,15 +7,20 @@ on:
     paths:
       - '**/*.toc'
 
+permissions:
+  contents: write
+
+concurrency:
+  group: release-${{ github.ref }}
+  cancel-in-progress: false
+
 jobs:
   create-release:
     runs-on: ubuntu-latest
-    permissions:
-      contents: write
 
     steps:
       - name: Checkout code
-        uses: actions/checkout@v4
+        uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683 # v4.2.2
 
       # 1. Читаем версию из .toc
       - name: Get version from .toc
@@ -31,7 +36,7 @@ jobs:
             echo "Error: '## Version:' is empty!"
             exit 1
           fi
-          echo "version=$VERSION" >> $GITHUB_OUTPUT
+          echo "version=$VERSION" >> "$GITHUB_OUTPUT"
 
       # 2. Проверяем, существует ли уже релиз с такой версией
       - name: Check if release exists
@@ -40,10 +45,10 @@ jobs:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         run: |
           if gh release view "${{ steps.read_version.outputs.version }}" --repo "${{ github.repository }}" >/dev/null 2>&1; then
-            echo "exists=true" >> $GITHUB_OUTPUT
+            echo "exists=true" >> "$GITHUB_OUTPUT"
             echo "Release ${{ steps.read_version.outputs.version }} already exists. Skipping."
           else
-            echo "exists=false" >> $GITHUB_OUTPUT
+            echo "exists=false" >> "$GITHUB_OUTPUT"
             echo "Release ${{ steps.read_version.outputs.version }} does not exist. Will create."
           fi
 
@@ -57,7 +62,7 @@ jobs:
       # 4. Создаём релиз
       - name: Create GitHub Release
         if: steps.check_release.outputs.exists == 'false'
-        uses: softprops/action-gh-release@v2
+        uses: softprops/action-gh-release@c95fe1489396fe8a9eb87c0abf8aa5b2ef267fda # v2.2.1
         with:
           tag_name: ${{ steps.read_version.outputs.version }}
           name: v${{ steps.read_version.outputs.version }}
