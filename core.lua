@@ -224,6 +224,7 @@ local function GetColorForType(frame, unitType)
 end
 
 local THREAT_COLOR_HOLD = { r = 0.20, g = 1.00, b = 0.20 }
+local THREAT_COLOR_LOST = { r = 1.00, g = 0.20, b = 0.20 } -- ← добавить
 local THREAT_COLOR_SLIP = { r = 1.00, g = 0.65, b = 0.00 }
 
 local function SetBarColor(hb, c)
@@ -447,9 +448,12 @@ local function ApplyCastBarSpark(cb)
     end
     local spark = cb.spark
     if not spark then
-        spark = cb:CreateTexture(nil, "ARTWORK", nil, 2)
+        spark = cb:CreateTexture(nil, "OVERLAY")
         cb.spark = spark
     end
+    -- 3.3.5: SetDrawLayer без sublevel; OVERLAY гарантированно выше ARTWORK-бара
+    -- даже после повторного SetStatusBarTexture (ReskinFrame пересоздает текстуру бара)
+    spark:SetDrawLayer("OVERLAY")
     spark:SetTexture(media.sparkTex)
     spark:SetBlendMode(cfg.CBsparkBlend or "ADD")
     local c = cfg.CBsparkColor
@@ -1018,7 +1022,7 @@ function AeonoPlates:ReskinFrame(frame)
         if cfg.CBshowIcon then
             local icon = castbar.Icon
             if not icon then
-                icon = castbar:CreateTexture(nil, "ARTWORK", nil, 1)
+                icon = castbar:CreateTexture(nil, "OVERLAY")
                 castbar.Icon = icon
             end
             local iconSize = (cfg.CBiconSize and cfg.CBiconSize > 0) and cfg.CBiconSize or 16
@@ -1748,8 +1752,13 @@ SkinNameplate = function(frame)
         }
     end
 
+    -- Порядок отрисовки на 3.3.5 (sublevel не поддерживается, порядок = порядок создания):
+    -- Border(BACKGROUND) < бар(ARTWORK) < спарк(OVERLAY) < иконка(OVERLAY) < имя(OVERLAY).
+    -- Поэтому спарк создаем ДО иконки и имени, все в OVERLAY.
+    ApplyCastBarSpark(castbar)
+
     if cfg.CBshowIcon then
-        castbar.Icon = castbar:CreateTexture(nil, "ARTWORK", nil, 1)
+        castbar.Icon = castbar:CreateTexture(nil, "OVERLAY")
         local iconSize = (cfg.CBiconSize and cfg.CBiconSize > 0) and cfg.CBiconSize or 16
         castbar.Icon:SetSize(iconSize, iconSize)
         castbar.Icon:SetPoint(cfg.CBiconPoint, castbar, cfg.CBiconRelativePoint, cfg.CBiconX, cfg.CBiconY)
@@ -1770,8 +1779,7 @@ SkinNameplate = function(frame)
         }
     end
 
-    castbar.name = castbar:CreateFontString(nil, "ARTWORK")
-    castbar.name:SetDrawLayer("ARTWORK", 3)
+    castbar.name = castbar:CreateFontString(nil, "OVERLAY")
     castbar.name:SetPoint(cfg.CBnamePoint, castbar, cfg.CBnameRelativePoint, cfg.CBnameX, cfg.CBnameY)
     castbar.name:SetFont(media.nameFont or media.font, cfg.CBnameFontSize, cfg.CBnameFlags or "")
     castbar.name:SetJustifyH(GetJustifyFromAnchor(cfg.CBnamePoint))
@@ -1788,7 +1796,6 @@ SkinNameplate = function(frame)
     end
 
     frame.customCastBar = castbar
-    ApplyCastBarSpark(castbar)
     castbar:Hide()
     castbar:SetAlpha(1)
 
