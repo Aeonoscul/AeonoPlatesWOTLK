@@ -226,6 +226,7 @@ end
 local THREAT_COLOR_HOLD = { r = 0.20, g = 1.00, b = 0.20 }
 local THREAT_COLOR_LOST = { r = 1.00, g = 0.20, b = 0.20 } -- ← добавить
 local THREAT_COLOR_SLIP = { r = 1.00, g = 0.65, b = 0.00 }
+local CAST_COLOR_PURPLE = { r = 0.65, g = 0.35, b = 1.00 }
 
 local function SetBarColor(hb, c)
     local cr, cg, cb = hb:GetStatusBarColor()
@@ -247,31 +248,35 @@ local function ApplyHealthBarColor(frame)
         return
     end
 
+    -- Приоритет 1: юнит кастует -> цвет каста (перекрывает угрозу и всё остальное)
+    local castbar = frame.customCastBar
+    if cfg.HPcolorCasting and castbar and (castbar._casting or castbar._channeling) then
+        SetBarColor(hb, cfg.HPcastColor or CAST_COLOR_PURPLE)
+        return
+    end
+
     if frame._hpType == "enemy_npc" or frame._hpType == "neutral" then
-        local threatTex = frame.threatGlow
-        
-        if threatTex then
-            if threatTex:IsShown() then
-                -- Моб В БОЮ! Смотрим на цвет текстуры угрозы Blizzard
-                local r, g, b = threatTex:GetVertexColor()
-                
-                if r > 0.7 and g < 0.5 then
-                    -- Красная текстура -> ты держишь агро
-                    SetBarColor(hb, THREAT_COLOR_HOLD) -- Зеленый
-                    return
-                elseif g > 0.7 and r < 0.7 then
-                    -- Зеленая текстура -> танк держит, а ты нет
-                    SetBarColor(hb, THREAT_COLOR_LOST) -- Красный
-                    return
-                else
-                    -- Желтая/Оранжевая текстура -> вот-вот сорвется
-                    SetBarColor(hb, THREAT_COLOR_SLIP) -- Желто-оранжевый
-                    return
-                end
+        -- Состояния берутся ТОЛЬКО из LibNameplates (её опрос раз в 0.25с и события смены):
+        --   _plateInCombat   - из LibNameplates_CombatChange (красное имя моба = в бою)
+        --   _threatSituation - из LibNameplates_ThreatChange ("HIGH"/"MEDIUM"/"LOW"/nil)
+        -- Три состояния в бою + четвертое (дефолтный цвет бара), когда моб вышел из боя.
+        if cfg.threatEnabled and frame._plateInCombat then
+            local sit = frame._threatSituation
+            if sit == "HIGH" then
+                -- Красное свечение -> ты держишь агро
+                SetBarColor(hb, cfg.threatColorHold or THREAT_COLOR_HOLD)
+                return
+            elseif sit == "MEDIUM" then
+                -- Желтое/зеленое свечение -> угроза на грани
+                SetBarColor(hb, cfg.threatColorSlip or THREAT_COLOR_SLIP)
+                return
+            else
+                -- LOW/nil: моб в бою, но тебя нет в его листе угрозы
+                SetBarColor(hb, cfg.threatColorLost or THREAT_COLOR_LOST)
+                return
             end
-            -- Если threatTex скрыт (IsShown == false), значит моб ВНЕ БОЯ.
-            -- Код идет дальше и красит бар в дефолтный цвет.
         end
+        -- Моб вне боя с тобой (или окрашивание выключено) -> дефолтный цвет типа пластины.
     end
 
     if frame._hpType == "enemy_player" and not frame._classColor then
@@ -561,6 +566,7 @@ SyncCastBarFromUnit = function(cb, unit)
     ActivateCastBarOnUpdate(cb)
     cb:Show()
     UpdateCastBarSpark(cb)
+    ApplyHealthBarColor(cb.ownerFrame)
 end
 
 local function ResetCastBar(cb)
@@ -587,6 +593,7 @@ local function ResetCastBar(cb)
         cb.spark:Hide()
     end
     DeactivateCastBarOnUpdate(cb)
+    ApplyHealthBarColor(cb.ownerFrame)
 end
 
 local function IsAppearanceOutdated(frame, healthBar)
@@ -1312,6 +1319,8 @@ local function OnFrameHide(self)
     end
     self._lastNameString = nil
     self._origBarColor = nil
+    self._threatSituation = nil
+    self._plateInCombat = nil
     ResetPlateColorCache(self)
     if self.customCastBar then
         ResetCastBar(self.customCastBar)
@@ -1326,6 +1335,13 @@ local function OnFrameShow(self)
     end
 
     CaptureOriginalColor(self)
+
+    -- Сеем состояние угрозы из кэшей LibNameplates (они переживают рецикл пластины),
+    -- чтобы не мигать дефолтным цветом до первого события либы (до 0.25с).
+    if LibNameplates then
+        self._threatSituation = LibNameplates.threatStatus[self]
+        self._plateInCombat = LibNameplates.combatStatus[self] and true or nil
+    end
 
     AeonoPlates:ReskinFrame(self)
 
@@ -1377,6 +1393,7 @@ local function FinishCast(cb, success, now)
     end
     cb._holdUntil = (now or GetTime()) + (success and cfg.CBholdSuccess or cfg.CBholdFailed)
     cb._fadeOut = true
+    ApplyHealthBarColor(cb.ownerFrame)
 end
 
 local function CastBar_OnEvent(self, event, ...)
@@ -1415,6 +1432,7 @@ local function CastBar_OnEvent(self, event, ...)
         ActivateCastBarOnUpdate(self)
         self:Show()
         UpdateCastBarSpark(self)
+        ApplyHealthBarColor(self.ownerFrame)
     elseif event == "UNIT_SPELLCAST_CHANNEL_START" then
         local name, _, _, texture, startTime, endTime, _, notInterruptible = UnitChannelInfo(unit)
         if not name then
@@ -1441,6 +1459,7 @@ local function CastBar_OnEvent(self, event, ...)
         ActivateCastBarOnUpdate(self)
         self:Show()
         UpdateCastBarSpark(self)
+        ApplyHealthBarColor(self.ownerFrame)
     elseif event == "UNIT_SPELLCAST_STOP" or event == "UNIT_SPELLCAST_CHANNEL_STOP" then
         if self._channeling then
             -- 3.3.5 does not fire UNIT_SPELLCAST_INTERRUPTED for channeled
@@ -1827,6 +1846,13 @@ SkinNameplate = function(frame)
     castBarOverlay:SetTexture(nil)
     bossIconRegion:SetTexture(nil)
 
+    -- Сеем состояние угрозы из кэшей LibNameplates, иначе при первом скине
+    -- (если состояние моба не менялось и событие не придёт) бар останется дефолтным.
+    if LibNameplates then
+        frame._threatSituation = LibNameplates.threatStatus[frame]
+        frame._plateInCombat = LibNameplates.combatStatus[frame] and true or nil
+    end
+
     ApplyHealthBarLayout(frame)
     ApplyHealthBarColor(frame)
     ApplyNameColor(frame)
@@ -1935,6 +1961,7 @@ function AeonoPlates:LibNameplates_ThreatChange(event, plate, situation)
     if not plate or not visibleFrames[plate] then
         return
     end
+    plate._threatSituation = situation
     ApplyHealthBarColor(plate)
 end
 
@@ -1942,6 +1969,7 @@ function AeonoPlates:LibNameplates_CombatChange(event, plate, inCombat)
     if not plate or not visibleFrames[plate] then
         return
     end
+    plate._plateInCombat = inCombat and true or nil
     ApplyHealthBarColor(plate)
 end
 
