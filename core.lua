@@ -224,14 +224,32 @@ local function GetColorForType(frame, unitType)
 end
 
 local THREAT_COLOR_HOLD = { r = 0.20, g = 1.00, b = 0.20 }
-local THREAT_COLOR_LOST = { r = 1.00, g = 0.20, b = 0.20 } -- ← добавить
+local THREAT_COLOR_LOST = { r = 1.00, g = 0.20, b = 0.20 }
 local THREAT_COLOR_SLIP = { r = 1.00, g = 0.65, b = 0.00 }
+local CAST_COLOR_PURPLE = { r = 0.65, g = 0.35, b = 1.00 }
 
 local function SetBarColor(hb, c)
     local cr, cg, cb = hb:GetStatusBarColor()
     if cr ~= c.r or cg ~= c.g or cb ~= c.b then
         hb:SetStatusBarColor(c.r, c.g, c.b)
     end
+end
+
+local function GetThreatGlowState(threatGlow)
+    if not threatGlow:IsVisible() then
+        return 0
+    end
+    local r, g, b = threatGlow:GetVertexColor()
+    if b > 0.5 then
+        return 0
+    end
+    if g < 0.5 then
+        return 3
+    end
+    if g < 0.9 then
+        return 2
+    end
+    return 1
 end
 
 local function ApplyHealthBarColor(frame)
@@ -247,30 +265,28 @@ local function ApplyHealthBarColor(frame)
         return
     end
 
+    local castbar = frame.customCastBar
+    if cfg.HPcolorCasting and castbar and (castbar._casting or castbar._channeling)
+        and (frame._hpType == "enemy_npc" or frame._hpType == "neutral") then
+        SetBarColor(hb, cfg.HPcastColor or CAST_COLOR_PURPLE)
+        return
+    end
+
     if frame._hpType == "enemy_npc" or frame._hpType == "neutral" then
-        local threatTex = frame.threatGlow
-        
+        local threatTex = cfg.threatEnabled and frame.threatGlow or nil
+
         if threatTex then
-            if threatTex:IsShown() then
-                -- Моб В БОЮ! Смотрим на цвет текстуры угрозы Blizzard
-                local r, g, b = threatTex:GetVertexColor()
-                
-                if r > 0.7 and g < 0.5 then
-                    -- Красная текстура -> ты держишь агро
-                    SetBarColor(hb, THREAT_COLOR_HOLD) -- Зеленый
-                    return
-                elseif g > 0.7 and r < 0.7 then
-                    -- Зеленая текстура -> танк держит, а ты нет
-                    SetBarColor(hb, THREAT_COLOR_LOST) -- Красный
-                    return
-                else
-                    -- Желтая/Оранжевая текстура -> вот-вот сорвется
-                    SetBarColor(hb, THREAT_COLOR_SLIP) -- Желто-оранжевый
-                    return
-                end
+            local state = GetThreatGlowState(threatTex)
+            if state == 3 then
+                SetBarColor(hb, cfg.threatColorHold or THREAT_COLOR_HOLD)
+                return
+            elseif state == 2 then
+                SetBarColor(hb, cfg.threatColorSlip or THREAT_COLOR_SLIP)
+                return
+            elseif state == 1 then
+                SetBarColor(hb, cfg.threatColorLost or THREAT_COLOR_LOST)
+                return
             end
-            -- Если threatTex скрыт (IsShown == false), значит моб ВНЕ БОЯ.
-            -- Код идет дальше и красит бар в дефолтный цвет.
         end
     end
 
@@ -304,6 +320,7 @@ end
 
 local FRAME_LEVELS_PER_PLATE = 3
 local FRAME_ORDER_INTERVAL = 0.15
+local THREAT_POLL_INTERVAL = 0.2
 local MOUSEOVER_POLL_INTERVAL = 0.2
 local STACK_DELTA_FALLBACK = 3
 local HIGHLIGHT_REANCHOR_INTERVAL = 0.5
@@ -451,8 +468,6 @@ local function ApplyCastBarSpark(cb)
         spark = cb:CreateTexture(nil, "OVERLAY")
         cb.spark = spark
     end
-    -- 3.3.5: SetDrawLayer без sublevel; OVERLAY гарантированно выше ARTWORK-бара
-    -- даже после повторного SetStatusBarTexture (ReskinFrame пересоздает текстуру бара)
     spark:SetDrawLayer("OVERLAY")
     spark:SetTexture(media.sparkTex)
     spark:SetBlendMode(cfg.CBsparkBlend or "ADD")
@@ -561,6 +576,7 @@ SyncCastBarFromUnit = function(cb, unit)
     ActivateCastBarOnUpdate(cb)
     cb:Show()
     UpdateCastBarSpark(cb)
+    ApplyHealthBarColor(cb.ownerFrame)
 end
 
 local function ResetCastBar(cb)
@@ -587,6 +603,7 @@ local function ResetCastBar(cb)
         cb.spark:Hide()
     end
     DeactivateCastBarOnUpdate(cb)
+    ApplyHealthBarColor(cb.ownerFrame)
 end
 
 local function IsAppearanceOutdated(frame, healthBar)
@@ -1377,6 +1394,7 @@ local function FinishCast(cb, success, now)
     end
     cb._holdUntil = (now or GetTime()) + (success and cfg.CBholdSuccess or cfg.CBholdFailed)
     cb._fadeOut = true
+    ApplyHealthBarColor(cb.ownerFrame)
 end
 
 local function CastBar_OnEvent(self, event, ...)
@@ -1415,6 +1433,7 @@ local function CastBar_OnEvent(self, event, ...)
         ActivateCastBarOnUpdate(self)
         self:Show()
         UpdateCastBarSpark(self)
+        ApplyHealthBarColor(self.ownerFrame)
     elseif event == "UNIT_SPELLCAST_CHANNEL_START" then
         local name, _, _, texture, startTime, endTime, _, notInterruptible = UnitChannelInfo(unit)
         if not name then
@@ -1441,10 +1460,9 @@ local function CastBar_OnEvent(self, event, ...)
         ActivateCastBarOnUpdate(self)
         self:Show()
         UpdateCastBarSpark(self)
+        ApplyHealthBarColor(self.ownerFrame)
     elseif event == "UNIT_SPELLCAST_STOP" or event == "UNIT_SPELLCAST_CHANNEL_STOP" then
         if self._channeling then
-            -- 3.3.5 does not fire UNIT_SPELLCAST_INTERRUPTED for channeled
-            -- spells; detect interruption by early termination of the channel
             local failed = self._channelEnd and (GetTime() < self._channelEnd - 0.15)
             FinishCast(self, not failed)
         elseif self._casting then
@@ -1763,9 +1781,6 @@ SkinNameplate = function(frame)
         }
     end
 
-    -- Порядок отрисовки на 3.3.5 (sublevel не поддерживается, порядок = порядок создания):
-    -- Border(BACKGROUND) < бар(ARTWORK) < спарк(OVERLAY) < иконка(OVERLAY) < имя(OVERLAY).
-    -- Поэтому спарк создаем ДО иконки и имени, все в OVERLAY.
     ApplyCastBarSpark(castbar)
 
     if cfg.CBshowIcon then
@@ -1990,6 +2005,7 @@ function AeonoPlates:OnEnable()
     local stackAccum = 0
     local mouseoverAccum = 0
     local highlightAccum = 0
+    local threatAccum = 0
     local lastStackingEnabled = cfg.stackingEnabled
     local lastPlayerCombat = UnitAffectingCombat("player")
 
@@ -2053,6 +2069,19 @@ function AeonoPlates:OnEnable()
                         hl:SetPoint("TOPLEFT", hb, "TOPLEFT", 0, 0)
                         hl:SetPoint("BOTTOMRIGHT", hb, "BOTTOMRIGHT", 0, 0)
                         hl:SetDrawLayer("OVERLAY", 7)
+                    end
+                end
+            end
+        end
+
+        threatAccum = threatAccum + elapsed
+        if threatAccum >= THREAT_POLL_INTERVAL then
+            threatAccum = 0
+            if cfg.threatEnabled then
+                for frame in pairs(visibleFrames) do
+                    local t = frame._hpType
+                    if t == "enemy_npc" or t == "neutral" then
+                        ApplyHealthBarColor(frame)
                     end
                 end
             end

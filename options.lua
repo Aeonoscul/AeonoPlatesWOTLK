@@ -165,6 +165,23 @@ local options = {
                             get = getValue("HPcolorFriendlyClasses"),
                             set = setValue("HPcolorFriendlyClasses")
                         },
+                        castColorEnabled = {
+                            type = "toggle",
+                            name = "Color Casting Plates",
+                            desc = "Tint the health bar of hostile/neutral NPC plates while casting. Highest priority: casting color > threat coloring > all other colors.",
+                            order = 4,
+                            get = getValue("HPcolorCasting"),
+                            set = setValue("HPcolorCasting")
+                        },
+                        castColor = {
+                            type = "color",
+                            name = "Casting Plate Color",
+                            desc = "Health bar color while the unit is casting.",
+                            hasAlpha = false,
+                            order = 5,
+                            get = getColor("HPcastColor"),
+                            set = setColor("HPcastColor")
+                        },
                         friendlyPlayerColor = {
                             type = "color",
                             name = "Friendly Player (outside group)",
@@ -1529,6 +1546,51 @@ local options = {
                             set = setValue("CBsparkOffsetY")
                         }
                     }
+                }
+            }
+        },
+
+        threat = {
+            type = "group",
+            name = "Threat",
+            order = 4.5,
+            args = {
+                enabled = {
+                    type = "toggle",
+                    name = "Enable Threat Coloring",
+                    desc = "Color the health bar of enemy/neutral plates by the Blizzard threat glow (red = you have aggro, yellow/orange = aggro about to change, green = the tank has aggro, not you).",
+                    order = 1,
+                    get = getValue("threatEnabled"),
+                    set = setValue("threatEnabled")
+                },
+                spacer1 = spacer(2),
+
+                colorHold = {
+                    type = "color",
+                    name = "Aggro Held (red glow)",
+                    desc = "Bar color when the mob's threat glow is red (you have aggro).",
+                    hasAlpha = false,
+                    order = 10,
+                    get = getColor("threatColorHold"),
+                    set = setColor("threatColorHold")
+                },
+                colorSlip = {
+                    type = "color",
+                    name = "About to Slip (orange/yellow glow)",
+                    desc = "Bar color when the mob's threat glow is orange/yellow (aggro is about to change).",
+                    hasAlpha = false,
+                    order = 11,
+                    get = getColor("threatColorSlip"),
+                    set = setColor("threatColorSlip")
+                },
+                colorLost = {
+                    type = "color",
+                    name = "Aggro Lost (green glow)",
+                    desc = "Bar color when the mob's threat glow is green (the tank has aggro, not you). When the glow is hidden the bar returns to the default plate color.",
+                    hasAlpha = false,
+                    order = 12,
+                    get = getColor("threatColorLost"),
+                    set = setColor("threatColorLost")
                 }
             }
         },
