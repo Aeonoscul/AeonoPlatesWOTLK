@@ -5,11 +5,11 @@ local LSM = LibStub("LibSharedMedia-3.0")
 ns.defaults = {
     profile = {
         HPcolorEnemyClasses = true,
-        HPcolorFriendlyClasses = true,
+        HPcolorFriendlyClasses = false,
         HPcolorFriendlyPlayer = {
-            r = 0.066,
-            g = 0.047,
-            b = 1.0
+            r = 0,
+            g = 1,
+            b = 0.992
         },
         HPcolorFriendlyNPC = {
             r = 0.109,
@@ -26,7 +26,7 @@ ns.defaults = {
             g = 1.0,
             b = 0.0
         },
-        HPwidth = 160,
+        HPwidth = 140,
         HPheight = 20,
         normTex = "Midnight Healthbar",
         HPbgTex = "Midnight Healthbar",
@@ -50,7 +50,7 @@ ns.defaults = {
         HPtextShow = true,
         HPtextShorten = true,
         HPtextFont = "Friz Quadrata TT",
-        HPtextSize = 12,
+        HPtextSize = 10,
         HPtextFlags = "OUTLINE",
         HPtextShadow = false,
         HPtextShadowX = 1,
@@ -63,12 +63,12 @@ ns.defaults = {
         },
         HPtextPoint = "RIGHT",
         HPtextRelativePoint = "RIGHT",
-        HPtextX = -33,
+        HPtextX = -28,
         HPtextY = 0,
 
         HPpctShow = true,
         HPpctFont = "Friz Quadrata TT",
-        HPpctSize = 12,
+        HPpctSize = 10,
         HPpctFlags = "OUTLINE",
         HPpctShadow = false,
         HPpctShadowX = 1,
@@ -85,9 +85,9 @@ ns.defaults = {
         HPpctY = 0,
 
         font = "Friz Quadrata TT",
-        NameFontSize = 12,
+        NameFontSize = 10,
         NameFlags = "OUTLINE",
-        NameWidth = 94,
+        NameWidth = 84,
         NameColor = {
             r = 0.964,
             g = 0.929,
@@ -108,7 +108,7 @@ ns.defaults = {
         Ny = 0,
 
         LvLFont = "Friz Quadrata TT",
-        LvLFontSize = 14,
+        LvLFontSize = 15,
         LvLFlags = "OUTLINE",
         LvLShadow = false,
         LvLShadowX = 1,
@@ -136,20 +136,20 @@ ns.defaults = {
         classifyX = 0,
         classifyY = 0,
 
-        CBwidth = 138,
-        CBheight = 14,
+        CBwidth = 120,
+        CBheight = 18,
         CBbarTex = "Midnight Cast",
-        CBbgTex = "Midnight Cast",
+        CBbgTex = "Midnight Cast Background",
         CBcolorBorder = {
-            r = 0.16,
-            g = 0.16,
-            b = 0.16,
-            a = 0.59
+            r = 0.129,
+            g = 0.129,
+            b = 0.129,
+            a = 0.78
         },
         CBpoint = "TOP",
         CBrelativePoint = "BOTTOM",
-        CBx = 6,
-        CBy = -1,
+        CBx = 10,
+        CBy = -3,
         CBcolorCast = {
             r = 1.0,
             g = 0.86,
@@ -176,7 +176,7 @@ ns.defaults = {
         },
         CBholdSuccess = 0.25,
         CBholdFailed = 0.25,
-        CBfadeTime = 0.4,
+        CBfadeTime = 0.5,
 
         CBborderShow = false,
         CBborderTex = "Blizzard Tooltip",
@@ -190,20 +190,20 @@ ns.defaults = {
 
         CBshowIcon = true,
         CBiconCropped = true,
-        CBiconSize = 12,
+        CBiconSize = 18,
         CBiconPoint = "RIGHT",
         CBiconRelativePoint = "LEFT",
-        CBiconX = 0,
+        CBiconX = -2,
         CBiconY = 0,
 
-        CBiconBorderShow = false,
-        CBiconBorderTex = "Blizzard Tooltip",
-        CBiconBorderSize = 5,
+        CBiconBorderShow = true,
+        CBiconBorderTex = "Ferous 8",
+        CBiconBorderSize = 12,
         CBiconBorderInset = -1,
         CBiconBorderColor = {
-            r = 0,
-            g = 0,
-            b = 0
+            r = 0.635,
+            g = 0.635,
+            b = 0.635
         },
 
         CBshowName = true,
@@ -224,16 +224,16 @@ ns.defaults = {
             g = 1,
             b = 1
         },
-        CBnameTruncate = 90,
+        CBnameTruncate = 75,
         CBnamePoint = "LEFT",
         CBnameRelativePoint = "LEFT",
         CBnameX = 3,
-        CBnameY = 0,
+        CBnameY = 1,
 
         CBsparkShow = true,
         CBsparkTex = "Interface\\AddOns\\AeonoPlates\\Media\\spark\\spark.tga",
         CBsparkWidth = 15,
-        CBsparkHeight = 25,
+        CBsparkHeight = 32,
         CBsparkColor = {
             r = 1,
             g = 1,
@@ -245,8 +245,8 @@ ns.defaults = {
         CBsparkOffsetY = 0,
 
         stackingEnabled = true,
-        stackingFreezeMouseover = true,
-        stackingXSpace = 150,
+        stackingFreezeMouseover = false,
+        stackingXSpace = 140,
         stackingYSpace = 25,
         stackingSpeed = 5,
         stackingUpdateRate = 0.01,
@@ -262,7 +262,7 @@ ns.defaults = {
 
         minimap = {
             hide = false,
-            minimapPos = 125.36,
+            minimapPos = 110.7730464241574,
             radius = 80
         }
     }

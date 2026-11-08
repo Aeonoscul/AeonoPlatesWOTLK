@@ -534,6 +534,7 @@ SyncCastBarFromUnit = function(cb, unit)
 
     cb._casting = (not isChannel) or nil
     cb._channeling = isChannel or nil
+    cb._channelEnd = isChannel and (endTime / 1000) or nil
     cb._fadeOut = nil
     cb._holdUntil = nil
     cb._max = maxTime / 1000
@@ -568,6 +569,7 @@ local function ResetCastBar(cb)
     end
     cb._casting = nil
     cb._channeling = nil
+    cb._channelEnd = nil
     cb._fadeOut = nil
     cb._holdUntil = nil
     cb._duration = nil
@@ -1358,6 +1360,7 @@ end
 local function FinishCast(cb, success, now)
     cb._casting = nil
     cb._channeling = nil
+    cb._channelEnd = nil
     cb._noInterrupt = nil
     if not cb._updateActive then
         ActivateCastBarOnUpdate(cb)
@@ -1393,6 +1396,7 @@ local function CastBar_OnEvent(self, event, ...)
         end
         self._casting = true
         self._channeling = nil
+        self._channelEnd = nil
         self._fadeOut = nil
         self._holdUntil = nil
         self._noInterrupt = notInterruptible and true or nil
@@ -1418,6 +1422,7 @@ local function CastBar_OnEvent(self, event, ...)
         end
         self._casting = nil
         self._channeling = true
+        self._channelEnd = endTime / 1000
         self._fadeOut = nil
         self._holdUntil = nil
         self._noInterrupt = notInterruptible and true or nil
@@ -1437,7 +1442,12 @@ local function CastBar_OnEvent(self, event, ...)
         self:Show()
         UpdateCastBarSpark(self)
     elseif event == "UNIT_SPELLCAST_STOP" or event == "UNIT_SPELLCAST_CHANNEL_STOP" then
-        if self._casting or self._channeling then
+        if self._channeling then
+            -- 3.3.5 does not fire UNIT_SPELLCAST_INTERRUPTED for channeled
+            -- spells; detect interruption by early termination of the channel
+            local failed = self._channelEnd and (GetTime() < self._channelEnd - 0.15)
+            FinishCast(self, not failed)
+        elseif self._casting then
             FinishCast(self, true)
         end
     elseif event == "UNIT_SPELLCAST_FAILED" or event == "UNIT_SPELLCAST_INTERRUPTED" then
@@ -1461,6 +1471,7 @@ local function CastBar_OnEvent(self, event, ...)
         if self:IsShown() and self._channeling then
             local name, _, _, _, startTime, endTime, _, notInterruptible = UnitChannelInfo(unit)
             if name then
+                self._channelEnd = endTime / 1000
                 self._duration = (endTime / 1000) - GetTime()
                 self._max = (endTime - startTime) / 1000
                 self._noInterrupt = notInterruptible and true or nil
