@@ -233,6 +233,7 @@ local function SetBarColor(hb, c)
     if cr ~= c.r or cg ~= c.g or cb ~= c.b then
         hb:SetStatusBarColor(c.r, c.g, c.b)
     end
+    hb._paintedR, hb._paintedG, hb._paintedB = c.r, c.g, c.b
 end
 
 local function GetThreatGlowState(threatGlow)
@@ -1328,6 +1329,10 @@ local function OnFrameHide(self)
         self:SetClampRectInsets(0, 0, 0, 0)
     end
     self._lastNameString = nil
+    if self._origBarColor and self.healthBar then
+        self.healthBar:SetStatusBarColor(self._origBarColor.r, self._origBarColor.g, self._origBarColor.b)
+        self.healthBar._paintedR, self.healthBar._paintedG, self.healthBar._paintedB = nil
+    end
     self._origBarColor = nil
     ResetPlateColorCache(self)
     if self.customCastBar then
@@ -2077,8 +2082,19 @@ function AeonoPlates:OnEnable()
         threatAccum = threatAccum + elapsed
         if threatAccum >= THREAT_POLL_INTERVAL then
             threatAccum = 0
-            if cfg.threatEnabled then
-                for frame in pairs(visibleFrames) do
+            for frame in pairs(visibleFrames) do
+                local hb = frame.healthBar
+                if hb and frame._origBarColor then
+                    local cr, cg, cb = hb:GetStatusBarColor()
+                    local oc = frame._origBarColor
+                    if cr ~= oc.r or cg ~= oc.g or cb ~= oc.b then
+                        if cr ~= hb._paintedR or cg ~= hb._paintedG or cb ~= hb._paintedB then
+                            oc.r, oc.g, oc.b = cr, cg, cb
+                            ResetPlateColorCache(frame)
+                        end
+                    end
+                end
+                if cfg.threatEnabled then
                     local t = frame._hpType
                     if t == "enemy_npc" or t == "neutral" then
                         ApplyHealthBarColor(frame)

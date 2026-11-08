@@ -1,0 +1,9 @@
+copy.bat
+
+Thumbs.db
+Desktop.ini
+
+.agents/
+.claude/
+.vscode/
+.codeassistant/
