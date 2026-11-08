@@ -228,11 +228,14 @@ local THREAT_COLOR_LOST = { r = 1.00, g = 0.20, b = 0.20 }
 local THREAT_COLOR_SLIP = { r = 1.00, g = 0.65, b = 0.00 }
 local CAST_COLOR_PURPLE = { r = 0.65, g = 0.35, b = 1.00 }
 
-local function SetBarColor(hb, c)
-    local cr, cg, cb = hb:GetStatusBarColor()
-    if cr ~= c.r or cg ~= c.g or cb ~= c.b then
-        hb:SetStatusBarColor(c.r, c.g, c.b)
+local function SetBarColor(frame, c)
+    local hb = frame.healthBar
+    if not hb or not c then
+        return
     end
+    hb._selfPaint = true
+    hb:SetStatusBarColor(c.r or 1, c.g or 1, c.b or 1)
+    hb._selfPaint = nil
 end
 
 local function GetThreatGlowState(threatGlow)
@@ -265,52 +268,31 @@ local function ApplyHealthBarColor(frame)
         return
     end
 
+    local color
     local castbar = frame.customCastBar
     if cfg.HPcolorCasting and castbar and (castbar._casting or castbar._channeling)
         and (frame._hpType == "enemy_npc" or frame._hpType == "neutral") then
-        SetBarColor(hb, cfg.HPcastColor or CAST_COLOR_PURPLE)
-        return
-    end
-
-    if frame._hpType == "enemy_npc" or frame._hpType == "neutral" then
+        color = cfg.HPcastColor or CAST_COLOR_PURPLE
+    elseif frame._hpType == "enemy_npc" or frame._hpType == "neutral" then
         local threatTex = cfg.threatEnabled and frame.threatGlow or nil
-
         if threatTex then
             local state = GetThreatGlowState(threatTex)
             if state == 3 then
-                SetBarColor(hb, cfg.threatColorHold or THREAT_COLOR_HOLD)
-                return
+                color = cfg.threatColorHold or THREAT_COLOR_HOLD
             elseif state == 2 then
-                SetBarColor(hb, cfg.threatColorSlip or THREAT_COLOR_SLIP)
-                return
+                color = cfg.threatColorSlip or THREAT_COLOR_SLIP
             elseif state == 1 then
-                SetBarColor(hb, cfg.threatColorLost or THREAT_COLOR_LOST)
-                return
+                color = cfg.threatColorLost or THREAT_COLOR_LOST
             end
         end
-    end
-
-    if frame._hpType == "enemy_player" and not frame._classColor then
-        local cr, cg, cb
-        if frame._origBarColor then
-            cr, cg, cb = frame._origBarColor.r, frame._origBarColor.g, frame._origBarColor.b
-        else
-            cr, cg, cb = hb:GetStatusBarColor()
+        if not color then
+            color = GetColorForType(frame, frame._hpType)
         end
-        for _, c in pairs(RAID_CLASS_COLORS) do
-            if math.abs(cr - c.r) < 0.01 and math.abs(cg - c.g) < 0.01 and math.abs(cb - c.b) < 0.01 then
-                frame._classColor = { r = c.r, g = c.g, b = c.b }
-                break
-            end
-        end
+    else
+        color = GetColorForType(frame, frame._hpType)
     end
 
-    local color = GetColorForType(frame, frame._hpType)
-    if not color then
-        return
-    end
-
-    SetBarColor(hb, color)
+    SetBarColor(frame, color)
 end
 
 local function ResetPlateColorCache(frame)
@@ -974,8 +956,8 @@ function AeonoPlates:ReskinFrame(frame)
         ApplyTextShadow(frame.healthPct, cfg.HPpctShadow, cfg.HPpctShadowX, cfg.HPpctShadowY, cfg.HPpctShadowColor)
         RefreshHealthPercent(frame)
     end
+healthBar:SetStatusBarTexture(media.normTex)
 
-    healthBar:SetStatusBarTexture(media.normTex)
 
     if healthBar.hpBackground then
         healthBar.hpBackground:SetTexture(media.hpBgTex)
@@ -1645,6 +1627,24 @@ SkinNameplate = function(frame)
     end
     if healthBar then
         healthBar.ownerFrame = frame
+
+        local origSetStatusBarColor = healthBar.SetStatusBarColor
+        healthBar.SetStatusBarColor = function(self, r, g, b, a)
+            origSetStatusBarColor(self, r, g, b, a)
+            if self._selfPaint then
+                return
+            end
+            local f = self.ownerFrame
+            if f then
+                if f._origBarColor then
+                    f._origBarColor.r, f._origBarColor.g, f._origBarColor.b = r, g, b
+                else
+                    f._origBarColor = { r = r, g = g, b = b }
+                end
+                ResetPlateColorCache(f)
+                ApplyHealthBarColor(f)
+            end
+        end
     end
     for i = 1, #regions do
         regions[i]:SetParent(virtual)
@@ -1946,6 +1946,14 @@ function AeonoPlates:LibNameplates_TargetNameplate(event, plate)
     end
 end
 
+-- Мгновенный синк кастбара цели на смену таргета: событие ставит флаг,
+-- первый же тик сканнера отрабатывает один синк (без поллинга).
+local targetSyncPending
+
+function AeonoPlates:OnTargetChanged()
+    targetSyncPending = true
+end
+
 function AeonoPlates:LibNameplates_ThreatChange(event, plate, situation)
     if not plate or not visibleFrames[plate] then
         return
@@ -2011,6 +2019,18 @@ function AeonoPlates:OnEnable()
 
     local scanner = CreateFrame("Frame")
     scanner:SetScript("OnUpdate", function(_, elapsed)
+        if targetSyncPending then
+            targetSyncPending = nil -- сработает ровно один раз на смену таргета
+
+            local plate = LibNameplates and LibNameplates:GetTargetNameplate()
+            if plate and visibleFrames[plate] then
+                local cb = plate.customCastBar
+                if cb and not cb._casting and not cb._channeling and not cb._fadeOut then
+                    SyncCastBarFromUnit(cb, "target")
+                end
+            end
+        end
+
         if lastStackingEnabled ~= cfg.stackingEnabled then
             lastStackingEnabled = cfg.stackingEnabled
             for frame in pairs(visibleFrames) do
@@ -2115,6 +2135,7 @@ function AeonoPlates:OnEnable()
 
     self:RegisterEvent("UNIT_FACTION", "OnFactionChanged")
     self:RegisterEvent("PLAYER_ENTERING_WORLD", "OnGroupChanged")
+    self:RegisterEvent("PLAYER_TARGET_CHANGED", "OnTargetChanged")
     self:RegisterEvent("PARTY_MEMBERS_CHANGED", "OnGroupChanged")
     self:RegisterEvent("PLAYER_LEVEL_UP", "OnPlayerLevelUp")
     self:RegisterEvent("RAID_ROSTER_UPDATE", "OnGroupChanged")
