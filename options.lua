@@ -165,23 +165,6 @@ local options = {
                             get = getValue("HPcolorFriendlyClasses"),
                             set = setValue("HPcolorFriendlyClasses")
                         },
-                        castColorEnabled = {
-                            type = "toggle",
-                            name = "Color Casting Plates",
-                            desc = "Tint the health bar while the plate's unit is casting. Highest priority: casting color > threat coloring > all other colors.",
-                            order = 4,
-                            get = getValue("HPcolorCasting"),
-                            set = setValue("HPcolorCasting")
-                        },
-                        castColor = {
-                            type = "color",
-                            name = "Casting Plate Color",
-                            desc = "Health bar color while the unit is casting.",
-                            hasAlpha = false,
-                            order = 5,
-                            get = getColor("HPcastColor"),
-                            set = setColor("HPcastColor")
-                        },
                         friendlyPlayerColor = {
                             type = "color",
                             name = "Friendly Player (outside group)",
@@ -1546,51 +1529,6 @@ local options = {
                             set = setValue("CBsparkOffsetY")
                         }
                     }
-                }
-            }
-        },
-
-        threat = {
-            type = "group",
-            name = "Threat",
-            order = 4.5,
-            args = {
-                enabled = {
-                    type = "toggle",
-                    name = "Enable Threat Coloring",
-                    desc = "Color enemy/neutral plates by the threat state reported by LibNameplates: HIGH (aggro held), MEDIUM (threat borderline), LOW (in combat, no threat) - and the default plate color when the mob is not in combat with you.",
-                    order = 1,
-                    get = getValue("threatEnabled"),
-                    set = setValue("threatEnabled")
-                },
-                spacer1 = spacer(2),
-
-                colorHold = {
-                    type = "color",
-                    name = "Aggro Held (HIGH)",
-                    desc = "Bar color for the HIGH threat state: red/orange threat glow, you have aggro.",
-                    hasAlpha = false,
-                    order = 10,
-                    get = getColor("threatColorHold"),
-                    set = setColor("threatColorHold")
-                },
-                colorSlip = {
-                    type = "color",
-                    name = "Threat Borderline (MEDIUM)",
-                    desc = "Bar color for the MEDIUM threat state: yellow/green threat glow, aggro is about to change.",
-                    hasAlpha = false,
-                    order = 11,
-                    get = getColor("threatColorSlip"),
-                    set = setColor("threatColorSlip")
-                },
-                colorLost = {
-                    type = "color",
-                    name = "No Threat, In Combat (LOW)",
-                    desc = "Bar color for the LOW threat state: the mob is in combat but you are not on its threat list.",
-                    hasAlpha = false,
-                    order = 12,
-                    get = getColor("threatColorLost"),
-                    set = setColor("threatColorLost")
                 }
             }
         },

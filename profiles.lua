@@ -26,30 +26,6 @@ ns.defaults = {
             g = 1.0,
             b = 0.0
         },
-
-        threatEnabled = true,
-        threatColorHold = {
-            r = 0.20,
-            g = 1.00,
-            b = 0.20
-        },
-        threatColorSlip = {
-            r = 1.00,
-            g = 0.65,
-            b = 0.00
-        },
-        threatColorLost = {
-            r = 1.00,
-            g = 0.20,
-            b = 0.20
-        },
-
-        HPcolorCasting = true,
-        HPcastColor = {
-            r = 0.65,
-            g = 0.35,
-            b = 1.00
-        },
         HPwidth = 140,
         HPheight = 20,
         normTex = "Midnight Healthbar",
@@ -310,14 +286,6 @@ function ns.RefreshConfig(addon)
     cfg.HPheight = p.HPheight
     cfg.HPbgTex = p.HPbgTex
     cfg.HPbgColor = p.HPbgColor
-
-    cfg.threatEnabled = p.threatEnabled
-    cfg.threatColorHold = p.threatColorHold
-    cfg.threatColorSlip = p.threatColorSlip
-    cfg.threatColorLost = p.threatColorLost
-
-    cfg.HPcolorCasting = p.HPcolorCasting
-    cfg.HPcastColor = p.HPcastColor
 
     cfg.HPborderShow = p.HPborderShow
     cfg.border = p.border
