@@ -1,0 +1,7 @@
+# Файлы и папки, которые не должны попадать в архив релиза
+# (git archive автоматически уважает export-ignore)
+.gitattributes export-ignore
+.gitignore export-ignore
+.github/ export-ignore
+.sourcecraft/ export-ignore
+copy.bat export-ignore

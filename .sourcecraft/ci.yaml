@@ -95,7 +95,9 @@ workflows:
                 echo "Release $VERSION does not exist. Will create."
 
                 # Создаём архив с папкой "AeonoPlates" внутри
-                git archive --format=zip HEAD --prefix="AeonoPlates/" -o "AeonoPlates-${VERSION}.zip"
+                # Файлы для исключения (.gitignore, .github/, .sourcecraft/ и т.д.)
+                # заданы через export-ignore в .gitattributes
+                git archive --worktree-attributes --format=zip HEAD --prefix="AeonoPlates/" -o "AeonoPlates-${VERSION}.zip"
                 ls -lh "AeonoPlates-${VERSION}.zip"
 
                 # Создаём релиз через REST API SourceCraft
