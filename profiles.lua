@@ -62,6 +62,7 @@ ns.defaults = {
         },
 
         HPborderShow = true,
+        HPborderBehind = false,
         glowTex = "Ferous 8",
         border = 12,
         borderInset = -2,
@@ -206,6 +207,7 @@ ns.defaults = {
         CBborderTex = "Blizzard Tooltip",
         CBborderSize = 5,
         CBborderInset = -1,
+        CBborderBehind = false,
         CBborderColor = {
             r = 0,
             g = 0,
@@ -320,6 +322,7 @@ function ns.RefreshConfig(addon)
     cfg.HPcastColor = p.HPcastColor
 
     cfg.HPborderShow = p.HPborderShow
+    cfg.HPborderBehind = p.HPborderBehind
     cfg.border = p.border
     cfg.borderInset = p.borderInset
     cfg.borderColor = p.borderColor
@@ -409,6 +412,7 @@ function ns.RefreshConfig(addon)
     cfg.CBborderTex = p.CBborderTex
     cfg.CBborderSize = p.CBborderSize
     cfg.CBborderInset = p.CBborderInset
+    cfg.CBborderBehind = p.CBborderBehind
     cfg.CBborderColor = p.CBborderColor
 
     cfg.CBshowIcon = p.CBshowIcon

@@ -140,7 +140,12 @@ local function UpdateFriendClassInfo()
     end
 end
 
-local function DetectPlateTypeFromColor(r, g, b)
+-- Реакция определяется по СЫРОМУ цвету бара (порт архитектуры RefinedBlizzPlates):
+-- этот цвет ставит только C++ клиента и никто его не перезаписывает — аддон
+-- красит СВОЮ текстуру hpPaintTex поверх бара (см. SetupPaintTexture), а
+-- healthBar:SetStatusBarColor не вызывает вовсе. Поэтому GetStatusBarColor()
+-- в любой момент возвращает честную реакцию юнита — гонки рецикла невозможны.
+local function DetectPlateTypeFromColor(frame, r, g, b)
     if r > 0.99 and g > 0.99 and b < 0.01 then
         return "neutral"
     end
@@ -155,32 +160,20 @@ local function DetectPlateTypeFromColor(r, g, b)
     end
     for _, c in pairs(RAID_CLASS_COLORS) do
         if math.abs(r - c.r) < 0.01 and math.abs(g - c.g) < 0.01 and math.abs(b - c.b) < 0.01 then
+            -- цвет вражеского игрока в неймплейтах — его классовый цвет
+            frame._classColor = c
             return "enemy_player"
         end
     end
     return "enemy_player"
 end
 
-local function CaptureOriginalColor(frame)
-    local hb = frame.healthBar
-    if not hb then
-        return
-    end
-    local r, g, b = hb:GetStatusBarColor()
-    frame._origBarColor = { r = r, g = g, b = b }
-end
-
 local function GetPlateType(frame)
-    local c = frame._origBarColor
-    if c then
-        return DetectPlateTypeFromColor(c.r, c.g, c.b)
-    end
     local hb = frame.healthBar
     if not hb then
         return nil
     end
-    local r, g, b = hb:GetStatusBarColor()
-    return DetectPlateTypeFromColor(r, g, b)
+    return DetectPlateTypeFromColor(frame, hb:GetStatusBarColor())
 end
 
 local function GetPartyClassColor(frame)
@@ -215,7 +208,7 @@ local function GetColorForType(frame, unitType)
         return cfg.HPcolorEnemy
     end
     if unitType == "enemy_player" then
-        if cfg.HPcolorEnemyClasses then
+        if cfg.HPcolorEnemyClasses and frame._classColor then
             return frame._classColor
         end
         return cfg.HPcolorEnemy
@@ -228,14 +221,42 @@ local THREAT_COLOR_LOST = { r = 1.00, g = 0.20, b = 0.20 }
 local THREAT_COLOR_SLIP = { r = 1.00, g = 0.65, b = 0.00 }
 local CAST_COLOR_PURPLE = { r = 0.65, g = 0.35, b = 1.00 }
 
+-- Своя текстура заливки: рисуем ПОВЕРХ бара, родную заливку глушим.
+-- healthBar:SetStatusBarColor не вызывается никогда — цвет бара остаётся
+-- под полным контролем C++ (см. DetectPlateTypeFromColor).
+local function SetupPaintTexture(healthBar)
+    if not healthBar.hpPaintTex then
+        healthBar:SetStatusBarTexture(media.normTex)
+        local fill = healthBar:GetStatusBarTexture()
+        if fill then
+            fill:SetTexture(nil) -- глушим родную заливку (реакцию красит C++)
+            healthBar.hpPaintTex = healthBar:CreateTexture(nil, "ARTWORK")
+            healthBar.hpPaintTex:SetAllPoints(fill) -- рект следует за процентом HP
+        end
+    end
+    local paint = healthBar.hpPaintTex
+    if paint then
+        paint:SetTexture(media.normTex)
+        local _, max = healthBar:GetMinMaxValues()
+        local val = healthBar:GetValue()
+        if max and max > 0 and val then
+            local pct = val / max
+            if pct < 0 then
+                pct = 0
+            elseif pct > 1 then
+                pct = 1
+            end
+            paint:SetTexCoord(0, pct, 0, 1)
+        end
+    end
+end
+
 local function SetBarColor(frame, c)
     local hb = frame.healthBar
-    if not hb or not c then
+    if not hb or not c or not hb.hpPaintTex then
         return
     end
-    hb._selfPaint = true
-    hb:SetStatusBarColor(c.r or 1, c.g or 1, c.b or 1)
-    hb._selfPaint = nil
+    hb.hpPaintTex:SetVertexColor(c.r or 1, c.g or 1, c.b or 1, c.a or 1)
 end
 
 local function GetThreatGlowState(threatGlow)
@@ -261,9 +282,8 @@ local function ApplyHealthBarColor(frame)
         return
     end
 
-    if not frame._hpType then
-        frame._hpType = GetPlateType(frame)
-    end
+    -- тип переквалифицируем при КАЖДОЙ перекраске: сырой цвет всегда честный
+    frame._hpType = GetPlateType(frame)
     if not frame._hpType then
         return
     end
@@ -323,6 +343,56 @@ local function CreateBorderFrame(parentFrame, anchorTarget, frameLevelOffset)
     bf._anchorTarget = anchorTarget
     bf._applied = {}
     return bf
+end
+
+-- Режим HPborderBehind: граница рендерится ПОД баром. Для этого фрейм границы
+-- перецепляется к родителю бара (virtual) и получает уровень ниже бара —
+-- видна только внешняя часть границы, не перекрывающая заливку.
+local function ApplyHealthBorderParent(healthBar)
+    local bf = healthBar.hpBorder
+    if not bf then
+        return
+    end
+    local behind = cfg.HPborderBehind
+    local parent = behind and healthBar:GetParent() or healthBar
+    if bf:GetParent() ~= parent then
+        bf:SetParent(parent)
+    end
+    local offset = behind and -1 or 1
+    bf:SetFrameLevel(healthBar:GetFrameLevel() + offset)
+end
+
+-- Аналог для границы кастбара (CBborderBehind)
+local function ApplyCastBorderParent(castbar)
+    local bf = castbar.borderFrame
+    if not bf then
+        return
+    end
+    local behind = cfg.CBborderBehind
+    local parent = behind and castbar:GetParent() or castbar
+    if bf:GetParent() ~= parent then
+        bf:SetParent(parent)
+    end
+    local offset = behind and -1 or 1
+    bf:SetFrameLevel(castbar:GetFrameLevel() + offset)
+end
+
+-- Порядок отрисовки кастбара (по убыванию): имя заклинания > спарк >
+-- граница(front) > бар > граница(behind).
+-- Спарк и имя должны быть ВЫШЕ границы: дочерний фрейм границы всегда рисуется
+-- поверх текстур кастбара, поэтому в режиме front-границы они перецепляются
+-- НА фрейм границы; в режиме behind-границы и без границы остаются на кастбаре.
+local function ApplyCastbarOverlayParenting(castbar)
+    local overlayParent = castbar
+    if cfg.CBborderShow and not cfg.CBborderBehind and castbar.borderFrame then
+        overlayParent = castbar.borderFrame
+    end
+    if castbar.spark and castbar.spark:GetParent() ~= overlayParent then
+        castbar.spark:SetParent(overlayParent)
+    end
+    if castbar.name and castbar.name:GetParent() ~= overlayParent then
+        castbar.name:SetParent(overlayParent)
+    end
 end
 
 local function UpdateBorderFrame(bf, anchorTarget, tex, size, inset, colorR, colorG, colorB)
@@ -450,7 +520,8 @@ local function ApplyCastBarSpark(cb)
         spark = cb:CreateTexture(nil, "OVERLAY")
         cb.spark = spark
     end
-    spark:SetDrawLayer("OVERLAY")
+    -- порядок отрисовки кастбара: бар < граница(front) < спарк < имя заклинания
+    spark:SetDrawLayer("OVERLAY", 1)
     spark:SetTexture(media.sparkTex)
     spark:SetBlendMode(cfg.CBsparkBlend or "ADD")
     local c = cfg.CBsparkColor
@@ -664,7 +735,8 @@ local function IsAppearanceOutdated(frame, healthBar)
                 local ba = castbar.borderApplied
                 if ba.edge ~= cfg.CBborderSize or ba.inset ~= cfg.CBborderInset or
                     not BorderFrameIsShown(castbar.borderFrame) or ba.tex ~= media.cbBorderTex or ba.colorR ~=
-                    cfg.CBborderColor.r or ba.colorG ~= cfg.CBborderColor.g or ba.colorB ~= cfg.CBborderColor.b then
+                    cfg.CBborderColor.r or ba.colorG ~= cfg.CBborderColor.g or ba.colorB ~= cfg.CBborderColor.b or
+                    ba.behind ~= cfg.CBborderBehind then
                     return true
                 end
             else
@@ -728,7 +800,7 @@ local function IsAppearanceOutdated(frame, healthBar)
             local a = healthBar.hpBorderApplied
             if a.edge ~= cfg.border or a.inset ~= cfg.borderInset or not BorderFrameIsShown(healthBar.hpBorder) or a.tex ~=
                 media.glowTex or a.colorR ~= cfg.borderColor.r or a.colorG ~= cfg.borderColor.g or a.colorB ~=
-                cfg.borderColor.b then
+                cfg.borderColor.b or a.behind ~= cfg.HPborderBehind then
                 return true
             end
         else
@@ -738,8 +810,7 @@ local function IsAppearanceOutdated(frame, healthBar)
         return true
     end
 
-    local tex = healthBar:GetStatusBarTexture()
-    if not tex or tex:GetTexture() ~= media.normTex then
+    if not healthBar.hpPaintTex or healthBar.hpPaintTex:GetTexture() ~= media.normTex then
         return true
     end
 
@@ -901,6 +972,17 @@ local function HealthBar_OnValueChanged(self, value)
     if not frame then
         return
     end
+    local paint = self.hpPaintTex
+    if paint then
+        local _, max = self:GetMinMaxValues()
+        local pct = (max and max > 0) and (value / max) or 0
+        if pct < 0 then
+            pct = 0
+        elseif pct > 1 then
+            pct = 1
+        end
+        paint:SetTexCoord(0, pct, 0, 1)
+    end
     RefreshHealthText(frame)
     RefreshHealthPercent(frame)
 end
@@ -956,7 +1038,7 @@ function AeonoPlates:ReskinFrame(frame)
         ApplyTextShadow(frame.healthPct, cfg.HPpctShadow, cfg.HPpctShadowX, cfg.HPpctShadowY, cfg.HPpctShadowColor)
         RefreshHealthPercent(frame)
     end
-healthBar:SetStatusBarTexture(media.normTex)
+SetupPaintTexture(healthBar)
 
 
     if healthBar.hpBackground then
@@ -971,13 +1053,15 @@ healthBar:SetStatusBarTexture(media.normTex)
         end
         UpdateBorderFrame(healthBar.hpBorder, healthBar, media.glowTex, cfg.border, cfg.borderInset, cfg.borderColor.r,
             cfg.borderColor.g, cfg.borderColor.b)
+        ApplyHealthBorderParent(healthBar)
         healthBar.hpBorderApplied = {
             edge = cfg.border,
             inset = cfg.borderInset,
             tex = media.glowTex,
             colorR = cfg.borderColor.r,
             colorG = cfg.borderColor.g,
-            colorB = cfg.borderColor.b
+            colorB = cfg.borderColor.b,
+            behind = cfg.HPborderBehind
         }
     elseif healthBar.hpBorder then
         HideBorderFrame(healthBar.hpBorder)
@@ -1007,18 +1091,21 @@ healthBar:SetStatusBarTexture(media.normTex)
             end
             UpdateBorderFrame(castbar.borderFrame, castbar, media.cbBorderTex, cfg.CBborderSize, cfg.CBborderInset,
                 cfg.CBborderColor.r, cfg.CBborderColor.g, cfg.CBborderColor.b)
+            ApplyCastBorderParent(castbar)
             castbar.borderApplied = {
                 edge = cfg.CBborderSize,
                 inset = cfg.CBborderInset,
                 tex = media.cbBorderTex,
                 colorR = cfg.CBborderColor.r,
                 colorG = cfg.CBborderColor.g,
-                colorB = cfg.CBborderColor.b
+                colorB = cfg.CBborderColor.b,
+                behind = cfg.CBborderBehind
             }
         elseif castbar.borderFrame then
             HideBorderFrame(castbar.borderFrame)
             castbar.borderApplied = nil
         end
+        ApplyCastbarOverlayParenting(castbar)
 
         if cfg.CBshowIcon then
             local icon = castbar.Icon
@@ -1187,14 +1274,14 @@ local function ReorderFrameLevels()
         if hb then
             hb:SetFrameLevel(base)
             if hb.hpBorder then
-                hb.hpBorder:SetFrameLevel(base + 1)
+                hb.hpBorder:SetFrameLevel(cfg.HPborderBehind and (base - 1) or (base + 1))
             end
         end
         local cb = frame.customCastBar
         if cb then
             cb:SetFrameLevel(base - 1)
             if cb.borderFrame then
-                cb.borderFrame:SetFrameLevel(base)
+                cb.borderFrame:SetFrameLevel(cfg.CBborderBehind and (base - 2) or base)
             end
             if cb.iconBorderFrame then
                 cb.iconBorderFrame:SetFrameLevel(base + 1)
@@ -1310,7 +1397,6 @@ local function OnFrameHide(self)
         self:SetClampRectInsets(0, 0, 0, 0)
     end
     self._lastNameString = nil
-    self._origBarColor = nil
     ResetPlateColorCache(self)
     if self.customCastBar then
         ResetCastBar(self.customCastBar)
@@ -1323,8 +1409,6 @@ local function OnFrameShow(self)
     if self.customCastBar then
         ResetCastBar(self.customCastBar)
     end
-
-    CaptureOriginalColor(self)
 
     AeonoPlates:ReskinFrame(self)
 
@@ -1626,25 +1710,9 @@ SkinNameplate = function(frame)
         child:SetFrameLevel(virtual:GetFrameLevel() + offset)
     end
     if healthBar then
+        -- Хук SetStatusBarColor удалён (порт RBP): C++ красит бар сам и Lua-хук
+        -- всё равно не срабатывает; цвет бара больше никем не перезаписывается
         healthBar.ownerFrame = frame
-
-        local origSetStatusBarColor = healthBar.SetStatusBarColor
-        healthBar.SetStatusBarColor = function(self, r, g, b, a)
-            origSetStatusBarColor(self, r, g, b, a)
-            if self._selfPaint then
-                return
-            end
-            local f = self.ownerFrame
-            if f then
-                if f._origBarColor then
-                    f._origBarColor.r, f._origBarColor.g, f._origBarColor.b = r, g, b
-                else
-                    f._origBarColor = { r = r, g = g, b = b }
-                end
-                ResetPlateColorCache(f)
-                ApplyHealthBarColor(f)
-            end
-        end
     end
     for i = 1, #regions do
         regions[i]:SetParent(virtual)
@@ -1665,11 +1733,6 @@ SkinNameplate = function(frame)
     end
 
     frame.healthBar = healthBar
-
-    if healthBar then
-        local cr, cg, cb = healthBar:GetStatusBarColor()
-        frame._origBarColor = { r = cr, g = cg, b = cb }
-    end
 
     frame.oldname = nameTextRegion
     nameTextRegion:Hide()
@@ -1720,7 +1783,7 @@ SkinNameplate = function(frame)
         frame.healthPct:Hide()
     end
 
-    healthBar:SetStatusBarTexture(media.normTex)
+    SetupPaintTexture(healthBar)
 
     healthBar.hpBackground = healthBar:CreateTexture(nil, "BORDER")
     healthBar.hpBackground:SetAllPoints(healthBar)
@@ -1732,13 +1795,15 @@ SkinNameplate = function(frame)
         healthBar.hpBorder = CreateBorderFrame(healthBar, healthBar, 1)
         UpdateBorderFrame(healthBar.hpBorder, healthBar, media.glowTex, cfg.border, cfg.borderInset, cfg.borderColor.r,
             cfg.borderColor.g, cfg.borderColor.b)
+        ApplyHealthBorderParent(healthBar)
         healthBar.hpBorderApplied = {
             edge = cfg.border,
             inset = cfg.borderInset,
             tex = media.glowTex,
             colorR = cfg.borderColor.r,
             colorG = cfg.borderColor.g,
-            colorB = cfg.borderColor.b
+            colorB = cfg.borderColor.b,
+            behind = cfg.HPborderBehind
         }
     end
 
@@ -1756,6 +1821,23 @@ SkinNameplate = function(frame)
         castTex:SetHorizTile(false)
         castTex:SetVertTile(false)
     end
+    -- Заливка «с раскрытием» как у HP-бара: по умолчанию StatusBar растягивает
+    -- текстуру на заполненную часть, здесь же показываем левую часть текстуры
+    -- пропорционально прогрессу (SetTexCoord по значению)
+    castbar:HookScript("OnValueChanged", function(self, value)
+        local tex = self:GetStatusBarTexture()
+        if not tex then
+            return
+        end
+        local _, max = self:GetMinMaxValues()
+        local pct = (max and max > 0) and (value / max) or 0
+        if pct < 0 then
+            pct = 0
+        elseif pct > 1 then
+            pct = 1
+        end
+        tex:SetTexCoord(0, pct, 0, 1)
+    end)
     castbar:SetPoint(cfg.CBpoint, healthBar, cfg.CBrelativePoint, cfg.CBx, cfg.CBy)
 
     castbar.Border = castbar:CreateTexture(nil, "BACKGROUND")
@@ -1771,13 +1853,15 @@ SkinNameplate = function(frame)
         castbar.borderFrame = CreateBorderFrame(castbar, castbar, 1)
         UpdateBorderFrame(castbar.borderFrame, castbar, media.cbBorderTex, cfg.CBborderSize, cfg.CBborderInset,
             cfg.CBborderColor.r, cfg.CBborderColor.g, cfg.CBborderColor.b)
+        ApplyCastBorderParent(castbar)
         castbar.borderApplied = {
             edge = cfg.CBborderSize,
             inset = cfg.CBborderInset,
             tex = media.cbBorderTex,
             colorR = cfg.CBborderColor.r,
             colorG = cfg.CBborderColor.g,
-            colorB = cfg.CBborderColor.b
+            colorB = cfg.CBborderColor.b,
+            behind = cfg.CBborderBehind
         }
     end
 
@@ -1813,6 +1897,7 @@ SkinNameplate = function(frame)
     if cfg.CBnameColor then
         castbar.name:SetTextColor(cfg.CBnameColor.r or 1, cfg.CBnameColor.g or 1, cfg.CBnameColor.b or 1)
     end
+    castbar.name:SetDrawLayer("OVERLAY", 2)
     if cfg.CBnameTruncate and cfg.CBnameTruncate > 0 then
         castbar.name:SetWidth(cfg.CBnameTruncate)
         castbar.name:SetWordWrap(false)
@@ -1820,6 +1905,8 @@ SkinNameplate = function(frame)
     if not cfg.CBshowName then
         castbar.name:Hide()
     end
+
+    ApplyCastbarOverlayParenting(castbar)
 
     frame.customCastBar = castbar
     castbar:Hide()
@@ -2013,7 +2100,7 @@ function AeonoPlates:OnEnable()
     local stackAccum = 0
     local mouseoverAccum = 0
     local highlightAccum = 0
-    local threatAccum = 0
+    local colorAccum = 0
     local lastStackingEnabled = cfg.stackingEnabled
     local lastPlayerCombat = UnitAffectingCombat("player")
 
@@ -2094,16 +2181,14 @@ function AeonoPlates:OnEnable()
             end
         end
 
-        threatAccum = threatAccum + elapsed
-        if threatAccum >= THREAT_POLL_INTERVAL then
-            threatAccum = 0
-            if cfg.threatEnabled then
-                for frame in pairs(visibleFrames) do
-                    local t = frame._hpType
-                    if t == "enemy_npc" or t == "neutral" then
-                        ApplyHealthBarColor(frame)
-                    end
-                end
+        colorAccum = colorAccum + elapsed
+        if colorAccum >= THREAT_POLL_INTERVAL then
+            colorAccum = 0
+            -- Ревалидация ВСЕХ плейт (порт PlatesSecUpdate из RBP): сырой цвет
+            -- бара меняет только C++, любое изменение реакции/юнита при рецикле
+            -- подхватывается здесь максимум за 0.2с — залипание невозможно
+            for frame in pairs(visibleFrames) do
+                ApplyHealthBarColor(frame)
             end
         end
 

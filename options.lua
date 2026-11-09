@@ -285,7 +285,15 @@ local options = {
                             get = getValue("HPborderShow"),
                             set = setValue("HPborderShow")
                         },
-                        spacer1 = spacer(2),
+                        behind = {
+                            type = "toggle",
+                            name = "Border Behind Bar",
+                            desc = "Render the border UNDER the bar instead of on top of it.",
+                            order = 2,
+                            get = getValue("HPborderBehind"),
+                            set = setValue("HPborderBehind")
+                        },
+                        spacer1 = spacer(3),
 
                         texture = {
                             type = "select",
@@ -615,18 +623,11 @@ local options = {
             }
         },
 
-        nameAndLevel = {
+        nameText = {
             type = "group",
-            name = "Name & Level",
+            name = "Name",
             order = 2,
-            childGroups = "tab",
             args = {
-
-                name = {
-                    type = "group",
-                    name = "Name",
-                    order = 1,
-                    args = {
                         font = {
                             type = "select",
                             dialogControl = mediaWidget("LSM30_Font"),
@@ -751,13 +752,13 @@ local options = {
                             set = setValue("Ny")
                         }
                     }
-                },
+        },
 
-                level = {
-                    type = "group",
-                    name = "Level",
-                    order = 2,
-                    args = {
+        levelText = {
+            type = "group",
+            name = "Level",
+            order = 3,
+            args = {
                         font = {
                             type = "select",
                             dialogControl = mediaWidget("LSM30_Font"),
@@ -860,8 +861,6 @@ local options = {
                             get = getValue("LvLy"),
                             set = setValue("LvLy")
                         }
-                    }
-                }
             }
         },
 
@@ -1167,7 +1166,15 @@ local options = {
                             get = getValue("CBborderShow"),
                             set = setValue("CBborderShow")
                         },
-                        spacer1 = spacer(2),
+                        behind = {
+                            type = "toggle",
+                            name = "Border Behind Bar",
+                            desc = "Render the border UNDER the bar instead of on top of it.",
+                            order = 2,
+                            get = getValue("CBborderBehind"),
+                            set = setValue("CBborderBehind")
+                        },
+                        spacer1 = spacer(3),
 
                         texture = {
                             type = "select",
